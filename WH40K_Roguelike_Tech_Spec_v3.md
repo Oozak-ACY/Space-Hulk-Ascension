@@ -1,7 +1,7 @@
 # ARCHITECTURE & GAME DESIGN SPECIFICATION (v3.0)
 **Project:** WH40K Space Hulk Roguelike (Working Title: *Space Hulk Ascension*)
 **Target Stack:** Rust + Bevy Engine (0.15+) + WebAssembly (`wasm32-unknown-unknown` via `Trunk`)
-**Visual Style:** 2D Top-Down Pixel Art (480x270 virtual resolution, Nearest-Neighbor filtering)
+**Visual Style:** 2D Pixel Art in **three-quarter top-down view** (*Binding of Isaac* / *Enter the Gungeon* style — not straight overhead, not isometric), 480x270 virtual resolution, Nearest-Neighbor filtering
 **Core Gameplay:** 360° Twin-Stick Shooter in fixed single-screen Rooms (*Binding of Isaac* / *Enter the Gungeon* feel) + Dynamic Psyche, Concurrent Quests & secret, risk-based Ascensions.
 
 > **Supersedes v2.** Vocabulary is defined in [`CONTEXT.md`](CONTEXT.md); every term in **bold** below means exactly what the glossary says. Architectural decisions are recorded in [`docs/adr/`](docs/adr/). When this spec and the glossary disagree, the glossary wins.
@@ -194,6 +194,13 @@ pub enum GameSystemSet {
 * **Weapons:** infinite ammo; each weapon has a reload or overheat profile (lasguns overheat, bolters reload).
 * **Collision:** custom lightweight AABB + circle collision on a spatial hash. No third-party physics engine.
 * **Camera:** fixed per Room. Room transitions slide or cut between screens.
+* **Three-quarter view:** the world is laid out on a flat top-down plane, but everything is *drawn* as seen slightly from the front:
+  * Characters and enemies are drawn standing (front/side/back facing), so armor, mutations and Ascension changes read clearly.
+  * The top wall of a Room shows its tall front face; side and bottom walls show only their thin top edge.
+  * Draw order is sorted by Y (lower on screen = drawn in front).
+  * Each sprite's anchor is at its feet. The collision circle sits at the feet/lower body and is smaller than the drawn sprite; projectiles fly at roughly chest height and cast a small ground shadow.
+  * Characters face 4 directions (or 8 if the art budget allows), chosen from the aim direction; the weapon sprite rotates freely toward the cursor.
+* The combat-feel prototype is straight overhead with placeholder shapes; its *layout and numbers* carry over, its look does not.
 
 ---
 
