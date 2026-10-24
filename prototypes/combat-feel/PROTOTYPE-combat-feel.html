@@ -1,0 +1,732 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE — Combat Feel</title>
+<!--
+  PROTOTYPE — THROWAWAY CODE. Lives on branch prototype/combat-feel, never on main.
+  Question: does the Milestone 1 room combat (move, dodge roll, laspistol overheat,
+  Relic Bolter reload, cultist rushers & gunners) feel good, and with which numbers?
+  The validated numbers go into assets/tuning.ron of the real Bevy game.
+-->
+<style>
+  :root {
+    --bg: #0d0e11; --panel: #15171c; --line: #262a33; --text: #d7d9de; --dim: #8a8f9a;
+    --accent: #c9a227; --danger: #c0392b; --ok: #4f9d5d;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { display: grid; grid-template-columns: 1fr 380px; gap: 16px; padding: 16px; min-height: 100vh; }
+  @media (max-width: 1100px) { .wrap { grid-template-columns: 1fr; } }
+  .stage { display: flex; flex-direction: column; align-items: center; gap: 10px; min-width: 0; }
+  .banner { width: 100%; background: #2a1d05; border: 1px solid #5a420c; color: #f0d68a;
+    padding: 8px 12px; border-radius: 6px; font-size: 12px; }
+  canvas { image-rendering: pixelated; image-rendering: crisp-edges; background: #000;
+    border: 1px solid var(--line); cursor: none; outline: none; }
+  .controls { color: var(--dim); font-size: 12px; text-align: center; }
+  .controls b { color: var(--text); font-weight: 600; }
+  aside { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px;
+    overflow-y: auto; max-height: calc(100vh - 32px); }
+  h1 { font-size: 16px; margin: 0 0 4px; color: var(--accent); letter-spacing: .02em; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); margin: 16px 0 6px; }
+  p.q { margin: 0 0 8px; color: var(--dim); }
+  .state { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; font-variant-numeric: tabular-nums; }
+  .state div { display: flex; justify-content: space-between; border-bottom: 1px dotted var(--line); padding: 1px 0; }
+  .state span:first-child { color: var(--dim); }
+  details { border: 1px solid var(--line); border-radius: 6px; margin: 6px 0; padding: 4px 8px; }
+  summary { cursor: pointer; font-weight: 600; padding: 2px 0; }
+  .row { display: grid; grid-template-columns: 1fr 120px 48px; align-items: center; gap: 6px; margin: 4px 0; }
+  .row label { color: var(--dim); font-size: 12px; }
+  .row input[type=range] { width: 100%; accent-color: var(--accent); }
+  .row output { text-align: right; font-variant-numeric: tabular-nums; }
+  .row.changed label { color: var(--accent); }
+  .btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  button { background: #22252d; color: var(--text); border: 1px solid var(--line); border-radius: 5px;
+    padding: 6px 10px; cursor: pointer; font: inherit; }
+  button:hover { border-color: var(--accent); }
+  textarea { width: 100%; height: 160px; background: #0b0c0f; color: #b8e0a0; border: 1px solid var(--line);
+    border-radius: 5px; font: 11px/1.4 ui-monospace, Consolas, monospace; padding: 6px; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="stage">
+    <div class="banner"><b>PROTOTYPE — throwaway.</b> Assumption: the question is “does the room combat <i>feel</i> right, and with which numbers?”. Placeholder shapes only, no art. Tune live on the right, then export the numbers.</div>
+    <canvas id="game" width="480" height="270" tabindex="0"></canvas>
+    <div class="controls">
+      <b>WASD / ZQSD / arrows</b> move · <b>mouse</b> aim · <b>left click (hold)</b> fire ·
+      <b>Space / right click</b> dodge roll · <b>1 / 2 / wheel</b> switch weapon · <b>R</b> reload ·
+      <b>P / Esc</b> pause · <b>Enter</b> restart after death
+    </div>
+  </div>
+
+  <aside>
+    <h1>Combat Feel — Room Loop</h1>
+    <p class="q">Fight waves of cultists in one sealed room. Each wave clears the room, the doors open, and the next wave seals it again. Change any value below while playing; amber labels differ from the default.</p>
+
+    <h2>What is happening</h2>
+    <div class="state" id="state"></div>
+
+    <h2>Tuning</h2>
+    <div id="tuning"></div>
+    <div class="btns">
+      <button id="reset">Reset all to defaults</button>
+      <button id="restart">Restart run</button>
+    </div>
+
+    <h2>Export</h2>
+    <p class="q">Copy the current numbers to paste into <code>assets/tuning.ron</code> later.</p>
+    <div class="btns"><button id="export">Generate RON</button><button id="copy">Copy</button></div>
+    <textarea id="ron" readonly placeholder="Press “Generate RON”"></textarea>
+  </aside>
+</div>
+
+<!-- ===================== PURE COMBAT MODULE (no DOM) ===================== -->
+<script>
+const Combat = (() => {
+  const ROOM = { x0: 8, y0: 38, x1: 472, y1: 262 };   // interior; HUD band is y 0..30
+  const DOOR_W = 40;
+  const MAX_HEAT = 100;
+
+  const SPEC = [
+    // group, key, label, min, max, step, default  (bool entries: type 'bool')
+    ['Player', 'moveSpeed', 'Move speed (px/s)', 40, 250, 5, 110],
+    ['Player', 'snappiness', 'Movement snappiness (60 = instant)', 2, 60, 1, 25],
+    ['Player', 'playerHp', 'Max HP', 20, 300, 10, 100],
+    ['Player', 'hurtInvuln', 'Invulnerable after hit (s)', 0, 2, 0.05, 0.6],
+
+    ['Dodge roll', 'dodgeSpeed', 'Roll speed (px/s)', 100, 500, 10, 260],
+    ['Dodge roll', 'dodgeDuration', 'Roll duration (s)', 0.1, 0.6, 0.01, 0.25],
+    ['Dodge roll', 'dodgeIframes', 'Invincibility window (s)', 0, 0.6, 0.01, 0.3],
+    ['Dodge roll', 'dodgeCooldown', 'Cooldown (s)', 0.2, 2, 0.05, 0.8],
+    ['Dodge roll', 'shootWhileRolling', 'Can shoot while rolling', 'bool', false],
+
+    ['Laspistol (overheat)', 'lasDamage', 'Damage', 1, 40, 1, 10],
+    ['Laspistol (overheat)', 'lasInterval', 'Time between shots (s)', 0.05, 0.6, 0.01, 0.2],
+    ['Laspistol (overheat)', 'lasSpeed', 'Bolt speed (px/s)', 100, 700, 10, 360],
+    ['Laspistol (overheat)', 'lasSpread', 'Spread (deg)', 0, 30, 1, 4],
+    ['Laspistol (overheat)', 'lasHeatPerShot', 'Heat per shot (of 100)', 0, 40, 1, 10],
+    ['Laspistol (overheat)', 'lasCoolRate', 'Cooling per second', 5, 150, 5, 40],
+    ['Laspistol (overheat)', 'lasLockout', 'Overheat lockout (s)', 0.2, 3, 0.1, 1.0],
+
+    ['Relic Bolter (reload)', 'boltDamage', 'Damage', 1, 60, 1, 18],
+    ['Relic Bolter (reload)', 'boltInterval', 'Time between shots (s)', 0.05, 0.8, 0.01, 0.25],
+    ['Relic Bolter (reload)', 'boltSpeed', 'Shell speed (px/s)', 100, 700, 10, 300],
+    ['Relic Bolter (reload)', 'boltSpread', 'Spread (deg)', 0, 30, 1, 6],
+    ['Relic Bolter (reload)', 'boltMag', 'Magazine size', 1, 40, 1, 12],
+    ['Relic Bolter (reload)', 'boltReload', 'Reload time (s)', 0.3, 4, 0.1, 1.6],
+
+    ['Cultist rusher', 'rusherHp', 'HP', 5, 150, 5, 30],
+    ['Cultist rusher', 'rusherSpeed', 'Speed (px/s)', 20, 200, 5, 70],
+    ['Cultist rusher', 'rusherContactDmg', 'Contact damage', 1, 50, 1, 10],
+
+    ['Cultist gunner', 'gunnerHp', 'HP', 5, 150, 5, 25],
+    ['Cultist gunner', 'gunnerSpeed', 'Speed (px/s)', 10, 150, 5, 50],
+    ['Cultist gunner', 'gunnerRange', 'Preferred distance (px)', 40, 250, 10, 120],
+    ['Cultist gunner', 'gunnerInterval', 'Time between shots (s)', 0.3, 4, 0.1, 1.2],
+    ['Cultist gunner', 'gunnerWindup', 'Aim warning before shot (s)', 0, 1, 0.05, 0.35],
+    ['Cultist gunner', 'gunnerBulletSpeed', 'Bullet speed (px/s)', 50, 400, 10, 160],
+    ['Cultist gunner', 'gunnerDmg', 'Bullet damage', 1, 40, 1, 6],
+
+    ['Waves', 'waveBase', 'Enemies in first wave', 1, 12, 1, 3],
+    ['Waves', 'waveGrowth', 'Extra enemies per wave', 0, 3, 0.5, 0.5],
+    ['Waves', 'waveMax', 'Max enemies per wave', 1, 20, 1, 10],
+    ['Waves', 'gunnerShare', 'Share of gunners', 0, 1, 0.05, 0.35],
+    ['Waves', 'spawnMinDist', 'Min spawn distance from you (px)', 0, 200, 10, 100],
+    ['Waves', 'spawnDelay', 'Spawn warning time (s)', 0, 2, 0.1, 0.6],
+
+    ['Juice', 'shakeOnHit', 'Screen shake on hit', 0, 6, 0.5, 1],
+    ['Juice', 'shakeOnKill', 'Screen shake on kill', 0, 10, 0.5, 3],
+    ['Juice', 'shakeOnHurt', 'Screen shake when hurt', 0, 12, 0.5, 6],
+    ['Juice', 'hitstopKillMs', 'Freeze frame on kill (ms)', 0, 150, 5, 40],
+    ['Juice', 'hitstopHurtMs', 'Freeze frame when hurt (ms)', 0, 200, 5, 80],
+    ['Juice', 'knockback', 'Enemy knockback on hit', 0, 300, 10, 60],
+    ['Juice', 'muzzleFlash', 'Muzzle flash', 'bool', true],
+    ['Juice', 'damageNumbers', 'Damage numbers', 'bool', false],
+
+    ['Cheats', 'godMode', 'God mode (take no damage)', 'bool', false],
+  ].map(r => r[3] === 'bool'
+    ? { group: r[0], key: r[1], label: r[2], type: 'bool', def: r[4] }
+    : { group: r[0], key: r[1], label: r[2], min: r[3], max: r[4], step: r[5], def: r[6] });
+
+  function defaultTuning() {
+    const t = {};
+    for (const s of SPEC) t[s.key] = s.def;
+    return t;
+  }
+
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const len = (x, y) => Math.hypot(x, y);
+
+  function segmentHitsCircle(ax, ay, bx, by, cx, cy, r) {
+    const dx = bx - ax, dy = by - ay;
+    const l2 = dx * dx + dy * dy;
+    let t = l2 > 0 ? ((cx - ax) * dx + (cy - ay) * dy) / l2 : 0;
+    t = clamp(t, 0, 1);
+    const px = ax + dx * t - cx, py = ay + dy * t - cy;
+    return px * px + py * py <= r * r;
+  }
+
+  function newRun(T) {
+    return {
+      t: 0, wave: 0, phase: 'cleared', phaseT: 1.0,
+      player: {
+        x: 240, y: 150, vx: 0, vy: 0, r: 5, hp: T.playerHp, maxHp: T.playerHp, aim: 0,
+        dodgeT: 0, dodgeDx: 0, dodgeDy: 0, iframeT: 0, dodgeCd: 0, hurtT: 0, flashT: 0, trailT: 0,
+        weapon: 0,
+        las: { cd: 0, heat: 0, overT: 0 },
+        bolt: { cd: 0, ammo: T.boltMag, reloadT: 0 },
+      },
+      enemies: [], bullets: [], fx: [],
+      shake: 0, hitstop: 0,
+      stats: { kills: 0, shots: 0, hits: 0, dmgTaken: 0, dodges: 0, roomsCleared: 0, iframeSaves: 0 },
+      lastEvent: 'Get ready…',
+    };
+  }
+
+  function addFx(s, f) { s.fx.push(Object.assign({ t: 0, life: 0.3, vx: 0, vy: 0 }, f)); }
+
+  function burst(s, x, y, color, n, speed) {
+    for (let i = 0; i < n; i++) {
+      const a = rnd(0, Math.PI * 2), v = rnd(speed * 0.3, speed);
+      addFx(s, { kind: 'spark', x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: rnd(0.15, 0.4), color });
+    }
+  }
+
+  function damagePlayer(s, T, dmg) {
+    const p = s.player;
+    if (s.phase === 'dead') return false;
+    if (p.iframeT > 0) { s.stats.iframeSaves++; return false; }
+    if (T.godMode || p.hurtT > 0) return false;
+    p.hp -= dmg;
+    p.hurtT = T.hurtInvuln;
+    p.flashT = 0.12;
+    s.stats.dmgTaken += dmg;
+    s.shake = Math.max(s.shake, T.shakeOnHurt);
+    s.hitstop = Math.max(s.hitstop, T.hitstopHurtMs / 1000);
+    burst(s, p.x, p.y, '#e05050', 8, 80);
+    s.lastEvent = `Hit for ${dmg}`;
+    if (p.hp <= 0) { p.hp = 0; s.phase = 'dead'; s.lastEvent = 'You died'; }
+    return true;
+  }
+
+  function shoot(s, T, kind) {
+    const p = s.player;
+    const spreadDeg = kind === 'las' ? T.lasSpread : T.boltSpread;
+    const a = p.aim + rnd(-0.5, 0.5) * spreadDeg * Math.PI / 180;
+    const speed = kind === 'las' ? T.lasSpeed : T.boltSpeed;
+    const muzzle = p.r + 4;
+    s.bullets.push({
+      team: 'player', kind,
+      x: p.x + Math.cos(p.aim) * muzzle, y: p.y + Math.sin(p.aim) * muzzle,
+      vx: Math.cos(a) * speed, vy: Math.sin(a) * speed,
+      r: kind === 'las' ? 2 : 3, dmg: kind === 'las' ? T.lasDamage : T.boltDamage, life: 2,
+    });
+    s.stats.shots++;
+    if (T.muzzleFlash) addFx(s, { kind: 'muzzle', x: p.x + Math.cos(p.aim) * muzzle, y: p.y + Math.sin(p.aim) * muzzle, life: 0.05, color: kind === 'las' ? '#ff7a5c' : '#ffd34d' });
+  }
+
+  function spawnWave(s, T) {
+    s.wave++;
+    const n = Math.min(T.waveMax, Math.round(T.waveBase + (s.wave - 1) * T.waveGrowth));
+    const p = s.player;
+    for (let i = 0; i < n; i++) {
+      const kind = Math.random() < T.gunnerShare ? 'gunner' : 'rusher';
+      let x = 0, y = 0, best = -1;
+      for (let k = 0; k < 40; k++) {
+        const cx = rnd(ROOM.x0 + 20, ROOM.x1 - 20), cy = rnd(ROOM.y0 + 20, ROOM.y1 - 20);
+        const d = len(cx - p.x, cy - p.y);
+        if (d >= T.spawnMinDist) { x = cx; y = cy; best = d; break; }
+        if (d > best) { best = d; x = cx; y = cy; }
+      }
+      const hp = kind === 'rusher' ? T.rusherHp : T.gunnerHp;
+      s.enemies.push({
+        kind, x, y, vx: 0, vy: 0, kvx: 0, kvy: 0, r: 6, hp, maxHp: hp,
+        spawnT: T.spawnDelay, flashT: 0, contactCd: 0,
+        fireT: rnd(0.5, 0.5 + T.gunnerInterval), windT: 0, lockAim: 0,
+        strafe: Math.random() < 0.5 ? -1 : 1, strafeT: rnd(1, 3),
+      });
+    }
+    s.phase = 'fighting';
+    s.lastEvent = `Wave ${s.wave}: ${n} cultists — doors sealed`;
+  }
+
+  function step(s, inp, T, dt) {
+    if (s.hitstop > 0) { s.hitstop -= dt; return; }
+    s.t += dt;
+    s.shake = Math.max(0, s.shake - 40 * dt);
+    const p = s.player;
+    const alive = s.phase !== 'dead';
+
+    // ---- player ----
+    if (alive) {
+      p.dodgeCd -= dt; p.iframeT -= dt; p.hurtT -= dt; p.flashT -= dt;
+      p.aim = Math.atan2(inp.aimY - p.y, inp.aimX - p.x);
+
+      let mx = inp.moveX, my = inp.moveY;
+      const ml = len(mx, my);
+      if (ml > 0) { mx /= ml; my /= ml; }
+
+      if (inp.dodge && p.dodgeCd <= 0 && p.dodgeT <= 0) {
+        const dx = ml > 0 ? mx : Math.cos(p.aim), dy = ml > 0 ? my : Math.sin(p.aim);
+        p.dodgeDx = dx; p.dodgeDy = dy;
+        p.dodgeT = T.dodgeDuration; p.iframeT = T.dodgeIframes; p.dodgeCd = T.dodgeCooldown;
+        s.stats.dodges++;
+      }
+
+      if (p.dodgeT > 0) {
+        p.dodgeT -= dt;
+        p.vx = p.dodgeDx * T.dodgeSpeed; p.vy = p.dodgeDy * T.dodgeSpeed;
+        p.trailT -= dt;
+        if (p.trailT <= 0) { p.trailT = 0.03; addFx(s, { kind: 'ghost', x: p.x, y: p.y, life: 0.18 }); }
+        if (p.dodgeT <= 0) { p.vx = mx * T.moveSpeed; p.vy = my * T.moveSpeed; }
+      } else {
+        const k = T.snappiness >= 60 ? 1 : 1 - Math.exp(-T.snappiness * dt);
+        p.vx += (mx * T.moveSpeed - p.vx) * k;
+        p.vy += (my * T.moveSpeed - p.vy) * k;
+      }
+      p.x = clamp(p.x + p.vx * dt, ROOM.x0 + p.r, ROOM.x1 - p.r);
+      p.y = clamp(p.y + p.vy * dt, ROOM.y0 + p.r, ROOM.y1 - p.r);
+
+      if (inp.switchTo !== null && inp.switchTo !== p.weapon) p.weapon = inp.switchTo;
+
+      // weapons tick
+      p.las.cd -= dt;
+      if (p.las.overT > 0) {
+        p.las.overT -= dt;
+        p.las.heat = MAX_HEAT * Math.max(0, p.las.overT) / T.lasLockout;
+        if (p.las.overT <= 0) p.las.heat = 0;
+      } else {
+        p.las.heat = Math.max(0, p.las.heat - T.lasCoolRate * dt);
+      }
+      p.bolt.cd -= dt;
+      if (p.bolt.reloadT > 0) {
+        p.bolt.reloadT -= dt;
+        if (p.bolt.reloadT <= 0) { p.bolt.ammo = T.boltMag; s.lastEvent = 'Bolter reloaded'; }
+      }
+      if (inp.reload && p.bolt.reloadT <= 0 && p.bolt.ammo < T.boltMag) p.bolt.reloadT = T.boltReload;
+
+      const canFire = inp.fire && (p.dodgeT <= 0 || T.shootWhileRolling);
+      if (canFire) {
+        if (p.weapon === 0) {
+          if (p.las.cd <= 0 && p.las.overT <= 0) {
+            shoot(s, T, 'las');
+            p.las.cd = T.lasInterval;
+            p.las.heat += T.lasHeatPerShot;
+            if (p.las.heat >= MAX_HEAT) { p.las.heat = MAX_HEAT; p.las.overT = T.lasLockout; s.lastEvent = 'Laspistol overheated!'; }
+          }
+        } else if (p.bolt.cd <= 0 && p.bolt.reloadT <= 0 && p.bolt.ammo > 0) {
+          shoot(s, T, 'bolt');
+          p.bolt.ammo--; p.bolt.cd = T.boltInterval;
+          if (p.bolt.ammo === 0) { p.bolt.reloadT = T.boltReload; s.lastEvent = 'Bolter empty — reloading'; }
+        }
+      }
+    }
+
+    // ---- enemies ----
+    if (alive) {
+      for (const e of s.enemies) {
+        if (e.spawnT > 0) { e.spawnT -= dt; continue; }
+        e.flashT -= dt; e.contactCd -= dt;
+        const decay = Math.exp(-10 * dt);
+        e.kvx *= decay; e.kvy *= decay;
+        const dx = p.x - e.x, dy = p.y - e.y, d = len(dx, dy) || 1;
+        const ux = dx / d, uy = dy / d;
+        let tx = 0, ty = 0;
+        if (e.kind === 'rusher') {
+          tx = ux * T.rusherSpeed; ty = uy * T.rusherSpeed;
+          if (d < e.r + p.r && e.contactCd <= 0) {
+            if (damagePlayer(s, T, T.rusherContactDmg)) { e.kvx -= ux * 120; e.kvy -= uy * 120; }
+            e.contactCd = 0.8;
+          }
+        } else {
+          e.strafeT -= dt;
+          if (e.strafeT <= 0) { e.strafe *= -1; e.strafeT = rnd(1, 3); }
+          const sp = T.gunnerSpeed;
+          if (d > T.gunnerRange + 20) { tx = ux * sp; ty = uy * sp; }
+          else if (d < T.gunnerRange - 20) { tx = -ux * sp; ty = -uy * sp; }
+          else { tx = -uy * sp * e.strafe; ty = ux * sp * e.strafe; }
+          if (e.windT > 0) {
+            tx *= 0.2; ty *= 0.2;
+            e.windT -= dt;
+            if (e.windT <= 0) {
+              s.bullets.push({ team: 'enemy', kind: 'enemy', x: e.x, y: e.y,
+                vx: Math.cos(e.lockAim) * T.gunnerBulletSpeed, vy: Math.sin(e.lockAim) * T.gunnerBulletSpeed,
+                r: 3, dmg: T.gunnerDmg, life: 4 });
+            }
+          } else {
+            e.fireT -= dt;
+            if (e.fireT <= 0) { e.windT = Math.max(0.0001, T.gunnerWindup); e.lockAim = Math.atan2(dy, dx); e.fireT = T.gunnerInterval; }
+          }
+        }
+        const k = 1 - Math.exp(-6 * dt);
+        e.vx += (tx - e.vx) * k; e.vy += (ty - e.vy) * k;
+        e.x = clamp(e.x + (e.vx + e.kvx) * dt, ROOM.x0 + e.r, ROOM.x1 - e.r);
+        e.y = clamp(e.y + (e.vy + e.kvy) * dt, ROOM.y0 + e.r, ROOM.y1 - e.r);
+      }
+      // separation
+      for (let i = 0; i < s.enemies.length; i++) for (let j = i + 1; j < s.enemies.length; j++) {
+        const a = s.enemies[i], b = s.enemies[j];
+        if (a.spawnT > 0 || b.spawnT > 0) continue;
+        const dx = b.x - a.x, dy = b.y - a.y, d = len(dx, dy), min = a.r + b.r;
+        if (d > 0 && d < min) { const push = (min - d) / 2, ux = dx / d, uy = dy / d; a.x -= ux * push; a.y -= uy * push; b.x += ux * push; b.y += uy * push; }
+      }
+    }
+
+    // ---- bullets ----
+    const keep = [];
+    for (const b of s.bullets) {
+      const ax = b.x, ay = b.y;
+      b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
+      let dead = b.life <= 0;
+      if (!dead && (b.x < ROOM.x0 || b.x > ROOM.x1 || b.y < ROOM.y0 || b.y > ROOM.y1)) {
+        dead = true; burst(s, clamp(b.x, ROOM.x0, ROOM.x1), clamp(b.y, ROOM.y0, ROOM.y1), '#888', 3, 40);
+      }
+      if (!dead && b.team === 'player') {
+        for (const e of s.enemies) {
+          if (e.spawnT > 0 || e.hp <= 0) continue;
+          if (segmentHitsCircle(ax, ay, b.x, b.y, e.x, e.y, e.r + b.r)) {
+            e.hp -= b.dmg; e.flashT = 0.08; s.stats.hits++;
+            const bl = len(b.vx, b.vy) || 1;
+            e.kvx += b.vx / bl * T.knockback; e.kvy += b.vy / bl * T.knockback;
+            s.shake = Math.max(s.shake, T.shakeOnHit);
+            if (T.damageNumbers) addFx(s, { kind: 'num', x: e.x, y: e.y - 8, vy: -30, life: 0.5, text: String(b.dmg) });
+            burst(s, b.x, b.y, b.kind === 'las' ? '#ff7a5c' : '#ffd34d', 3, 60);
+            if (e.hp <= 0) {
+              s.stats.kills++;
+              s.shake = Math.max(s.shake, T.shakeOnKill);
+              s.hitstop = Math.max(s.hitstop, T.hitstopKillMs / 1000);
+              burst(s, e.x, e.y, e.kind === 'rusher' ? '#c0392b' : '#d68a1c', 14, 110);
+            }
+            dead = true; break;
+          }
+        }
+      }
+      if (!dead && b.team === 'enemy' && alive) {
+        if (segmentHitsCircle(ax, ay, b.x, b.y, p.x, p.y, p.r + b.r)) {
+          // rolling (i-frames) lets bullets pass through; a real hit consumes the bullet
+          if (damagePlayer(s, T, b.dmg)) dead = true;
+        }
+      }
+      if (!dead) keep.push(b);
+    }
+    s.bullets = keep;
+    s.enemies = s.enemies.filter(e => e.hp > 0);
+
+    // ---- fx ----
+    for (const f of s.fx) { f.t += dt; f.x += f.vx * dt; f.y += f.vy * dt; f.vx *= 0.9; f.vy *= 0.9; }
+    s.fx = s.fx.filter(f => f.t < f.life);
+
+    // ---- room phase ----
+    if (s.phase === 'fighting' && s.enemies.length === 0) {
+      s.phase = 'cleared'; s.phaseT = 1.6; s.stats.roomsCleared++;
+      for (const b of s.bullets) if (b.team === 'enemy') burst(s, b.x, b.y, '#b46cff', 3, 30);
+      s.bullets = s.bullets.filter(b => b.team !== 'enemy');
+      s.lastEvent = `Room cleared — doors open (wave ${s.wave})`;
+    } else if (s.phase === 'cleared') {
+      s.phaseT -= dt;
+      if (s.phaseT <= 0) spawnWave(s, T);
+    }
+  }
+
+  return { ROOM, DOOR_W, MAX_HEAT, SPEC, defaultTuning, newRun, step };
+})();
+</script>
+
+<!-- ===================== THROWAWAY PAGE SHELL ===================== -->
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let T = Combat.defaultTuning();
+let S = Combat.newRun(T);
+let paused = false;
+let scale = 2;
+
+// ---------- input ----------
+const keys = new Set();
+const input = { aimX: 300, aimY: 150, fire: false, dodge: false, reload: false, switchTo: null };
+let mouse = { x: 300, y: 150, inside: false };
+
+function isTyping(e) { return e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement; }
+addEventListener('keydown', e => {
+  if (isTyping(e) && e.target.type !== 'range') return;
+  keys.add(e.code);
+  if (e.code === 'Space') { input.dodge = true; e.preventDefault(); }
+  if (e.code === 'KeyR') input.reload = true;
+  if (e.code === 'Digit1') input.switchTo = 0;
+  if (e.code === 'Digit2') input.switchTo = 1;
+  if (e.code === 'KeyP' || e.code === 'Escape') paused = !paused;
+  if (e.code === 'Enter' && S.phase === 'dead') S = Combat.newRun(T);
+  if (e.code.startsWith('Arrow') && e.target.type !== 'range') e.preventDefault();
+});
+addEventListener('keyup', e => keys.delete(e.code));
+addEventListener('blur', () => { keys.clear(); input.fire = false; paused = true; });
+
+function toGame(e) {
+  const r = canvas.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / r.width * 480, y: (e.clientY - r.top) / r.height * 270 };
+}
+canvas.addEventListener('mousemove', e => { mouse = { ...toGame(e), inside: true }; });
+canvas.addEventListener('mouseleave', () => { mouse.inside = false; });
+canvas.addEventListener('mousedown', e => {
+  canvas.focus({ preventScroll: true });
+  if (e.button === 0) input.fire = true;
+  if (e.button === 2) input.dodge = true;
+});
+addEventListener('mouseup', e => { if (e.button === 0) input.fire = false; });
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('wheel', e => { e.preventDefault(); input.switchTo = S.player.weapon === 0 ? 1 : 0; }, { passive: false });
+
+function readMove() {
+  const k = c => keys.has(c);
+  // KeyW/KeyA/KeyS/KeyD are physical positions, so ZQSD on AZERTY works too.
+  const x = (k('KeyD') || k('ArrowRight') ? 1 : 0) - (k('KeyA') || k('ArrowLeft') ? 1 : 0);
+  const y = (k('KeyS') || k('ArrowDown') ? 1 : 0) - (k('KeyW') || k('ArrowUp') ? 1 : 0);
+  return { x, y };
+}
+
+// ---------- render ----------
+const R = Combat.ROOM;
+function render() {
+  const s = S, p = s.player;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#07080a'; ctx.fillRect(0, 0, 480, 270);
+  const sx = s.shake > 0 ? Math.round((Math.random() * 2 - 1) * s.shake) : 0;
+  const sy = s.shake > 0 ? Math.round((Math.random() * 2 - 1) * s.shake) : 0;
+  ctx.setTransform(1, 0, 0, 1, sx, sy);
+
+  // room
+  ctx.fillStyle = '#3a3d45'; ctx.fillRect(R.x0 - 8, R.y0 - 8, R.x1 - R.x0 + 16, R.y1 - R.y0 + 16);
+  ctx.fillStyle = '#1b1c21'; ctx.fillRect(R.x0, R.y0, R.x1 - R.x0, R.y1 - R.y0);
+  ctx.fillStyle = '#212329';
+  for (let x = R.x0; x < R.x1; x += 16) ctx.fillRect(x, R.y0, 1, R.y1 - R.y0);
+  for (let y = R.y0; y < R.y1; y += 16) ctx.fillRect(R.x0, y, R.x1 - R.x0, 1);
+  const doorCol = s.phase === 'fighting' ? '#8a1f1f' : '#2f6b3a';
+  const cx = (R.x0 + R.x1) / 2, cy = (R.y0 + R.y1) / 2, hw = Combat.DOOR_W / 2;
+  ctx.fillStyle = doorCol;
+  ctx.fillRect(cx - hw, R.y0 - 8, Combat.DOOR_W, 8); ctx.fillRect(cx - hw, R.y1, Combat.DOOR_W, 8);
+  ctx.fillRect(R.x0 - 8, cy - hw, 8, Combat.DOOR_W); ctx.fillRect(R.x1, cy - hw, 8, Combat.DOOR_W);
+
+  // fx: ghosts under everything
+  for (const f of s.fx) if (f.kind === 'ghost') {
+    ctx.globalAlpha = 0.35 * (1 - f.t / f.life); ctx.fillStyle = '#9fd38f';
+    circle(f.x, f.y, p.r);
+  }
+  ctx.globalAlpha = 1;
+
+  // enemies
+  for (const e of s.enemies) {
+    if (e.spawnT > 0) {
+      if (Math.floor(e.spawnT * 12) % 2 === 0) { ctx.strokeStyle = '#e04040'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 2, 0, Math.PI * 2); ctx.stroke(); }
+      continue;
+    }
+    if (e.kind === 'gunner' && e.windT > 0) {
+      ctx.strokeStyle = 'rgba(214,138,28,0.6)'; ctx.lineWidth = 1; ctx.beginPath();
+      ctx.moveTo(e.x, e.y); ctx.lineTo(e.x + Math.cos(e.lockAim) * 60, e.y + Math.sin(e.lockAim) * 60); ctx.stroke();
+    }
+    ctx.fillStyle = e.flashT > 0 ? '#ffffff' : (e.kind === 'rusher' ? '#c0392b' : '#d68a1c');
+    circle(e.x, e.y, e.r);
+    if (e.hp < e.maxHp) {
+      ctx.fillStyle = '#300'; ctx.fillRect(Math.round(e.x - 7), Math.round(e.y - e.r - 5), 14, 2);
+      ctx.fillStyle = '#e04040'; ctx.fillRect(Math.round(e.x - 7), Math.round(e.y - e.r - 5), Math.round(14 * e.hp / e.maxHp), 2);
+    }
+  }
+
+  // player
+  if (s.phase !== 'dead') {
+    const blink = p.hurtT > 0 && Math.floor(p.hurtT * 20) % 2 === 0;
+    if (!blink) {
+      ctx.fillStyle = p.flashT > 0 ? '#ffffff' : (p.iframeT > 0 ? '#b8f0a8' : '#5f9e4c');
+      circle(p.x, p.y, p.r);
+      ctx.strokeStyle = '#d8d8d8'; ctx.lineWidth = 2; ctx.beginPath();
+      ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + Math.cos(p.aim) * (p.r + 5), p.y + Math.sin(p.aim) * (p.r + 5)); ctx.stroke();
+    }
+  }
+
+  // bullets
+  for (const b of s.bullets) {
+    if (b.kind === 'las') {
+      ctx.strokeStyle = '#ff5a3c'; ctx.lineWidth = 2; ctx.beginPath();
+      const l = len2(b.vx, b.vy); ctx.moveTo(b.x - b.vx / l * 6, b.y - b.vy / l * 6); ctx.lineTo(b.x, b.y); ctx.stroke();
+    } else if (b.kind === 'bolt') { ctx.fillStyle = '#ffd34d'; circle(b.x, b.y, b.r); }
+    else { ctx.fillStyle = 'rgba(180,108,255,0.35)'; circle(b.x, b.y, b.r + 2); ctx.fillStyle = '#d9b8ff'; circle(b.x, b.y, b.r); }
+  }
+
+  // fx
+  for (const f of s.fx) {
+    const a = 1 - f.t / f.life;
+    if (f.kind === 'spark') { ctx.globalAlpha = a; ctx.fillStyle = f.color; ctx.fillRect(Math.round(f.x), Math.round(f.y), 1, 1); }
+    else if (f.kind === 'muzzle') { ctx.globalAlpha = 1; ctx.fillStyle = f.color; circle(f.x, f.y, 3); }
+    else if (f.kind === 'num') { ctx.globalAlpha = a; ctx.fillStyle = '#fff'; ctx.font = 'bold 8px monospace'; ctx.textAlign = 'center'; ctx.fillText(f.text, f.x, f.y); }
+  }
+  ctx.globalAlpha = 1;
+
+  // crosshair
+  if (mouse.inside) {
+    ctx.fillStyle = '#f0f0f0';
+    const mx = Math.round(mouse.x - sx), my = Math.round(mouse.y - sy);
+    ctx.fillRect(mx - 4, my, 3, 1); ctx.fillRect(mx + 2, my, 3, 1); ctx.fillRect(mx, my - 4, 1, 3); ctx.fillRect(mx, my + 2, 1, 3);
+  }
+
+  // HUD (no shake)
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#0f1013'; ctx.fillRect(0, 0, 480, 30);
+  ctx.font = 'bold 8px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillStyle = '#300'; ctx.fillRect(8, 8, 90, 7);
+  ctx.fillStyle = '#c0392b'; ctx.fillRect(8, 8, Math.round(90 * p.hp / p.maxHp), 7);
+  ctx.fillStyle = '#ddd'; ctx.fillText(`HP ${Math.ceil(p.hp)}/${p.maxHp}`, 8, 18);
+  if (p.weapon === 0) {
+    ctx.fillStyle = '#ddd'; ctx.fillText('LASPISTOL', 112, 6);
+    ctx.fillStyle = '#222'; ctx.fillRect(112, 16, 70, 5);
+    ctx.fillStyle = p.las.overT > 0 ? '#ff3b1f' : '#ff9a3c'; ctx.fillRect(112, 16, Math.round(70 * p.las.heat / Combat.MAX_HEAT), 5);
+    if (p.las.overT > 0) { ctx.fillStyle = '#ff3b1f'; ctx.fillText('OVERHEAT', 188, 15); }
+  } else {
+    ctx.fillStyle = '#ddd'; ctx.fillText('RELIC BOLTER', 112, 6);
+    if (p.bolt.reloadT > 0) {
+      ctx.fillStyle = '#222'; ctx.fillRect(112, 16, 70, 5);
+      ctx.fillStyle = '#ffd34d'; ctx.fillRect(112, 16, Math.round(70 * (1 - p.bolt.reloadT / T.boltReload)), 5);
+      ctx.fillText('RELOADING', 188, 15);
+    } else {
+      for (let i = 0; i < T.boltMag; i++) { ctx.fillStyle = i < p.bolt.ammo ? '#ffd34d' : '#333'; ctx.fillRect(112 + i * 4, 16, 3, 5); }
+    }
+  }
+  ctx.fillStyle = p.dodgeCd <= 0 ? '#9fd38f' : '#444';
+  ctx.fillText(p.dodgeCd <= 0 ? 'ROLL READY' : 'ROLL', 300, 6);
+  ctx.fillStyle = '#222'; ctx.fillRect(300, 16, 40, 4);
+  ctx.fillStyle = '#9fd38f'; ctx.fillRect(300, 16, Math.round(40 * (1 - Math.max(0, p.dodgeCd) / T.dodgeCooldown)), 4);
+  ctx.textAlign = 'right'; ctx.fillStyle = '#ddd';
+  ctx.fillText(`WAVE ${s.wave}`, 472, 6);
+  ctx.fillStyle = '#aaa'; ctx.fillText(`${s.enemies.length} LEFT  ${s.stats.kills} KILLS`, 472, 18);
+
+  // overlays
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (s.phase === 'cleared') {
+    ctx.fillStyle = '#9fd38f'; ctx.font = 'bold 10px monospace';
+    ctx.fillText(s.wave === 0 ? 'GET READY' : 'ROOM CLEARED', 240, 60);
+  }
+  if (s.phase === 'dead') overlay('YOU DIED', `Wave ${s.wave} · ${s.stats.kills} kills · press Enter`);
+  else if (paused) overlay('PAUSED', 'press P or Esc');
+}
+function len2(x, y) { return Math.hypot(x, y) || 1; }
+function circle(x, y, r) { ctx.beginPath(); ctx.arc(Math.round(x), Math.round(y), r, 0, Math.PI * 2); ctx.fill(); }
+function overlay(title, sub) {
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 30, 480, 240);
+  ctx.fillStyle = '#eee'; ctx.font = 'bold 16px monospace'; ctx.fillText(title, 240, 140);
+  ctx.font = 'bold 8px monospace'; ctx.fillStyle = '#aaa'; ctx.fillText(sub, 240, 160);
+}
+
+// ---------- state panel ----------
+const stateEl = document.getElementById('state');
+function renderState() {
+  const s = S, p = s.player;
+  const accuracy = s.stats.shots ? Math.round(100 * s.stats.hits / s.stats.shots) + '%' : '—';
+  const rows = [
+    ['Room', s.phase === 'fighting' ? 'Sealed — fighting' : s.phase === 'dead' ? 'Dead' : 'Cleared'],
+    ['Wave', s.wave],
+    ['HP', `${Math.ceil(p.hp)} / ${p.maxHp}`],
+    ['Weapon', p.weapon === 0 ? 'Laspistol' : 'Relic Bolter'],
+    ['Heat', `${Math.round(p.las.heat)}${p.las.overT > 0 ? ' (locked)' : ''}`],
+    ['Bolter ammo', p.bolt.reloadT > 0 ? 'reloading' : p.bolt.ammo],
+    ['Roll', p.dodgeT > 0 ? 'rolling' : p.dodgeCd > 0 ? `cooldown ${p.dodgeCd.toFixed(1)}s` : 'ready'],
+    ['Invincible', p.iframeT > 0 ? 'roll' : p.hurtT > 0 ? 'after hit' : 'no'],
+    ['Enemies left', s.enemies.length],
+    ['Kills', s.stats.kills],
+    ['Accuracy', accuracy],
+    ['Damage taken', s.stats.dmgTaken],
+    ['Rolls used', s.stats.dodges],
+    ['Hits dodged by roll', s.stats.iframeSaves],
+    ['Rooms cleared', s.stats.roomsCleared],
+    ['Time', `${Math.floor(s.t)}s`],
+  ];
+  stateEl.innerHTML = rows.map(([k, v]) => `<div><span>${k}</span><span>${v}</span></div>`).join('')
+    + `<div style="grid-column:1/-1"><span>Last event</span><span>${s.lastEvent}</span></div>`;
+}
+
+// ---------- tuning panel ----------
+const tuningEl = document.getElementById('tuning');
+function fmt(v, step) { return typeof v === 'boolean' ? (v ? 'on' : 'off') : (step < 1 ? (+v).toFixed(String(step).split('.')[1].length) : String(v)); }
+function buildTuning() {
+  tuningEl.innerHTML = '';
+  const groups = {};
+  for (const sp of Combat.SPEC) (groups[sp.group] ||= []).push(sp);
+  for (const [g, list] of Object.entries(groups)) {
+    const d = document.createElement('details');
+    if (['Player', 'Dodge roll', 'Juice'].includes(g)) d.open = true;
+    d.innerHTML = `<summary>${g}</summary>`;
+    for (const sp of list) {
+      const row = document.createElement('div'); row.className = 'row';
+      const id = 't_' + sp.key;
+      if (sp.type === 'bool') {
+        row.innerHTML = `<label for="${id}">${sp.label}</label><input id="${id}" type="checkbox"><output></output>`;
+        const inp = row.querySelector('input'), out = row.querySelector('output');
+        inp.checked = T[sp.key];
+        const sync = () => { T[sp.key] = inp.checked; out.textContent = fmt(inp.checked); row.classList.toggle('changed', inp.checked !== sp.def); };
+        inp.addEventListener('change', sync); sync();
+      } else {
+        row.innerHTML = `<label for="${id}">${sp.label}</label><input id="${id}" type="range" min="${sp.min}" max="${sp.max}" step="${sp.step}"><output></output>`;
+        const inp = row.querySelector('input'), out = row.querySelector('output');
+        inp.value = T[sp.key];
+        const sync = () => { T[sp.key] = +inp.value; out.textContent = fmt(+inp.value, sp.step); row.classList.toggle('changed', +inp.value !== sp.def); };
+        inp.addEventListener('input', sync); sync();
+      }
+      d.appendChild(row);
+    }
+    tuningEl.appendChild(d);
+  }
+}
+buildTuning();
+document.getElementById('reset').onclick = () => { T = Combat.defaultTuning(); buildTuning(); };
+document.getElementById('restart').onclick = () => { S = Combat.newRun(T); paused = false; canvas.focus({ preventScroll: true }); };
+
+const snake = s => s.replace(/[^a-zA-Z0-9]+/g, ' ').trim().replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase().replace(/ +/g, '_');
+document.getElementById('export').onclick = () => {
+  const groups = {};
+  for (const sp of Combat.SPEC) if (sp.group !== 'Cheats') (groups[sp.group] ||= []).push(sp);
+  let out = '// PROTOTYPE export from combat-feel — values to carry into assets/tuning.ron\n(\n';
+  for (const [g, list] of Object.entries(groups)) {
+    out += `    ${snake(g)}: (\n`;
+    for (const sp of list) {
+      const v = T[sp.key];
+      out += `        ${snake(sp.key)}: ${typeof v === 'boolean' ? v : (Number.isInteger(v) && sp.step >= 1 ? v : (+v).toFixed(2))},\n`;
+    }
+    out += '    ),\n';
+  }
+  document.getElementById('ron').value = out + ')\n';
+};
+document.getElementById('copy').onclick = () => {
+  const ta = document.getElementById('ron');
+  if (!ta.value) document.getElementById('export').onclick();
+  navigator.clipboard?.writeText(ta.value).catch(() => { ta.select(); document.execCommand('copy'); });
+};
+
+// ---------- layout & loop ----------
+function fit() {
+  const stage = document.querySelector('.stage');
+  const avail = Math.min(stage.clientWidth, innerHeight - 140);
+  scale = Math.max(1, Math.floor(Math.min(stage.clientWidth / 480, (innerHeight - 140) / 270)));
+  canvas.style.width = 480 * scale + 'px'; canvas.style.height = 270 * scale + 'px';
+}
+addEventListener('resize', fit); fit();
+
+let last = performance.now(), stateTick = 0;
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); // clamp big hitches (tab switch) so nothing tunnels
+  last = now;
+  const m = readMove();
+  input.moveX = m.x; input.moveY = m.y;
+  input.aimX = mouse.x; input.aimY = mouse.y;
+  if (!paused) Combat.step(S, input, T, dt);
+  input.dodge = false; input.reload = false; input.switchTo = null;
+  render();
+  stateTick -= dt;
+  if (stateTick <= 0) { renderState(); stateTick = 0.1; }
+  requestAnimationFrame(frame);
+}
+canvas.focus({ preventScroll: true });
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
