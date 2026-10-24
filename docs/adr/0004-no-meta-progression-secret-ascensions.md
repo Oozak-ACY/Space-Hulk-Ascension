@@ -1,0 +1,3 @@
+# No meta-progression; Ascensions stay secret
+
+Every Run starts from the same plain Mortal, and nothing — no stats, no unlocked content, no codex — carries over between Runs. The game never shows which Ascensions exist or which the player has already found. Most modern roguelites reward death with unlocks and a discovery log; we rejected that because it turns Ascensions into a checklist players grind runs to complete. Keeping them secret and per-Run means every Ascension is a surprise found through play (talking to the right NPC, holding the right relic), and the only measure of progress is how deep a Run gets.

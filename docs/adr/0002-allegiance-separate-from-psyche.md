@@ -1,0 +1,3 @@
+# Allegiance is separate from Psyche
+
+Which factions are hostile to the player is decided by **Allegiance** (Imperium / Unaligned / Chaos), not read directly from the Psyche value. Allegiance follows Psyche State by default, but certain events lock it — becoming a Heretic Astartes or Daemon Prince locks it to Chaos — and only a Penance Quest can unlock it. We split the two because a single scalar could not express "a Heretic Astartes who has clawed back to Lucid Psyche is still hunted by the Imperium"; Psyche drives the world's look, dialogue and Blessings, Allegiance drives who shoots at you.

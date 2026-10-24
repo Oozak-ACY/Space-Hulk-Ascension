@@ -1,0 +1,3 @@
+# Every balance value lives in data, never in code
+
+Any number a balance patch might touch — weapon damage and fire rate, stat values and scalings, Psyche thresholds and shift amounts, Survival Roll bases and caps, Class Meter rates, quest targets, spawn weights, room and floor counts, movement speeds — is defined in `.ron` data files, not as a Rust constant or literal. Systems read these values; they never embed them. We accept the extra indirection (every tunable needs a field in a data struct and a default in a file) because the goal is that rebalancing the game is a data-only change: a patch edits values in files and touches no gameplay code.

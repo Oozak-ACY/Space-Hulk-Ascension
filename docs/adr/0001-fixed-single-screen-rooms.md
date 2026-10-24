@@ -1,0 +1,3 @@
+# Fixed single-screen Rooms on a grid
+
+Every Room is exactly one fixed screen (480x270), and Rooms are placed on an Isaac-style grid with an organic, branching layout. The original pitch promised an *Alien Swarm* feel (scrolling rooms, camera follow, line-of-sight fog); we chose the *Binding of Isaac* model instead because the room is the core unit of the game — it seals, it is cleared, it evaluates quests, it pays out — and a fixed screen makes that unit legible, makes procedural generation and the minimap simple, and lets collision stay a lightweight custom system. Larger room shapes (2x1, L, 2x2) remain a possible later extension; scrolling corridors and fog of war are out.
