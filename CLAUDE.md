@@ -2,6 +2,14 @@
 
 2D twin-stick roguelike in Rust + Bevy (WebAssembly). Design source of truth: `WH40K_Roguelike_Tech_Spec_v3.md`.
 
+## Build & run
+
+Bevy is pinned to 0.20.0 (current release when M1 was scaffolded, October 2026).
+
+- Native: `cargo run`
+- Browser: `trunk serve --release` (debug wasm is too large to serve comfortably)
+- Tests: `cargo test` — they drive `GameplayPlugin` through the headless app in `src/headless.rs`; the client plugin (`src/client/`) is not tested.
+
 ## Agent skills
 
 ### Issue tracker

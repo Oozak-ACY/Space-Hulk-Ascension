@@ -1,0 +1,14 @@
+[package]
+name = "space_hulk_ascension"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Pinned at scaffold time (M1): Bevy 0.20.0, the current release in October 2026.
+bevy = "=0.20.0"
+fastrand = "2"
+ron = "0.12"
+serde = { version = "1", features = ["derive"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+fastrand = { version = "2", features = ["js"] }

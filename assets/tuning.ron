@@ -1,0 +1,17 @@
+// Global balance values (ADR 0003). Initial values are spec v3 §9.1,
+// validated by the combat-feel prototype.
+(
+    player: (
+        move_speed: 110.0,          // px/s
+        snappiness: 25.0,           // exponential approach rate toward the target velocity, 1/s
+        max_hp: 100.0,
+        hurt_invulnerability: 0.6,  // s after a hit
+        radius: 5.0,                // collision circle at the feet, px
+    ),
+    room: (
+        interior_width: 464.0,      // px
+        interior_height: 224.0,     // px
+        wall_thickness: 8.0,        // px
+    ),
+    max_frame_delta: 0.05,          // s; longer frames are clamped so nothing tunnels
+)
