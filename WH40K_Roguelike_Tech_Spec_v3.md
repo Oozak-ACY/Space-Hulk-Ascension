@@ -368,6 +368,22 @@ Goal: prove the twin-stick feel and the event bus that quests depend on.
 
 **Out of scope for M1:** Ascensions, Callings, Class Meters, Blessings, Bounties, melee, Suspend Save, multi-Floor generation.
 
+### 9.1 Starting combat tuning (validated by prototype)
+These values were playtested in the combat-feel prototype (branch `prototype/combat-feel`) and felt right. They are the initial contents of `tuning.ron` / `weapons.ron` / `enemies.ron`.
+
+| Area | Values |
+| :--- | :--- |
+| Player (Mortal) | move speed 110 px/s, movement snappiness 25, max HP 100, 0.6 s invulnerability after a hit, radius 5 |
+| Dodge Roll | speed 260 px/s, duration 0.25 s, invincibility 0.30 s, cooldown 0.8 s, cannot shoot while rolling |
+| Laspistol (overheat) | damage 10, 0.20 s between shots, bolt speed 360, spread 4°, **heat 15 per shot** (of 100), cooling 40/s, 1.0 s overheat lockout |
+| Relic Bolter (reload) | damage 18, 0.25 s between shots, speed 300, spread 6°, magazine 12, reload 1.6 s |
+| Cultist rusher | HP 30, speed 70, contact damage 10 |
+| Cultist gunner | HP 25, speed 50, keeps 120 px away, fires every 1.2 s after a 0.35 s aim warning, bullet speed 160, damage 6 |
+| Room spawns | spawn ≥ 100 px from the player, 0.6 s spawn warning, enemy bullets cleared when the Room is cleared |
+| Juice | shake 1 / 3 / 6 (hit / kill / hurt), freeze frame 40 ms on kill and 80 ms when hurt, knockback 60, muzzle flash on |
+
+Room combat was played in endless waves in the prototype; real Rooms use the director's per-Room counts instead.
+
 ---
 
 ## 10. PARKED OPEN ITEMS (not blocking M1)
@@ -378,3 +394,5 @@ Goal: prove the twin-stick feel and the event bus that quests depend on.
 4. Which Run actions raise death-triggered Ascension chances.
 5. Melee combat (needed for the Daemon Blade and World Eater).
 6. Larger Room shapes (2x1, L, 2x2) — possible later extension of ADR 0001.
+7. Movement profile per Class (e.g. Astartes heavier and slower to turn than a Mortal soldier) — movement and Dodge Roll values become per-Class data rather than global.
+8. Class-specific evasion: some Classes or Callings could replace the Dodge Roll with another move on the same button (e.g. a Psyker teleport).
