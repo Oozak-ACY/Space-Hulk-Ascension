@@ -23,6 +23,20 @@ pub struct PlayerTuning {
     pub max_hp: f32,
     pub hurt_invulnerability: f32,
     pub radius: f32,
+    pub dodge_roll: DodgeRollTuning,
+}
+
+/// Dodge Roll timings, in seconds from the start of the roll.
+#[derive(Debug, Clone, Copy, Deserialize)]
+pub struct DodgeRollTuning {
+    /// px/s while rolling.
+    pub speed: f32,
+    /// How long the roll moves the player.
+    pub duration: f32,
+    /// How long the player cannot be hurt.
+    pub invincibility: f32,
+    /// How long until the next roll can start.
+    pub cooldown: f32,
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -26,7 +26,7 @@ pub(super) struct WorldCamera;
 
 /// Draws the scaled canvas to the window.
 #[derive(Component)]
-struct ScreenCamera;
+pub(super) struct ScreenCamera;
 
 pub(super) fn initial_window_resolution() -> WindowResolution {
     WindowResolution::new(VIEW_WIDTH * INITIAL_SCALE, VIEW_HEIGHT * INITIAL_SCALE)
@@ -89,6 +89,21 @@ fn fit_canvas_to_window(
         .min(window.physical_height() / VIEW_HEIGHT)
         .max(1);
     projection.scale = window.scale_factor() / whole_scale as f32;
+}
+
+/// The gameplay position under a window cursor position, if it is on the canvas.
+pub(super) fn cursor_to_world(
+    cursor: Vec2,
+    (screen_camera, screen_transform): (&Camera, &GlobalTransform),
+    world_camera: &Transform,
+) -> Option<Vec2> {
+    // The screen camera sees the canvas centred on its origin, one unit per canvas pixel.
+    let on_canvas = screen_camera
+        .viewport_to_world_2d(screen_transform, cursor)
+        .ok()?;
+    let half_view = Vec2::new(VIEW_WIDTH as f32, VIEW_HEIGHT as f32) / 2.0;
+    (on_canvas.abs().cmple(half_view).all())
+        .then(|| world_camera.translation.truncate() + on_canvas)
 }
 
 /// Fixed camera per Room: the Room fills the view below the HUD band.

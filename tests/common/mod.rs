@@ -7,7 +7,7 @@ use space_hulk_ascension::{
     data::Tuning,
     headless,
     kinematics::Position,
-    player::{MoveIntent, Player},
+    player::{AimIntent, DodgeIntent, DodgeRoll, MoveIntent, Player},
     run::StartRun,
 };
 
@@ -55,4 +55,23 @@ pub fn player_position(app: &mut App) -> Vec2 {
 pub fn set_move_intent(app: &mut App, direction: Vec2) {
     let player = player(app);
     app.world_mut().get_mut::<MoveIntent>(player).unwrap().0 = direction;
+}
+
+pub fn set_aim_intent(app: &mut App, direction: Vec2) {
+    let player = player(app);
+    app.world_mut()
+        .get_mut::<AimIntent>(player)
+        .unwrap()
+        .direction = direction;
+}
+
+/// Presses the Dodge Roll button for the next frame.
+pub fn request_dodge_roll(app: &mut App) {
+    let player = player(app);
+    app.world_mut().get_mut::<DodgeIntent>(player).unwrap().0 = true;
+}
+
+pub fn dodge_roll_state(app: &mut App) -> DodgeRoll {
+    let player = player(app);
+    *app.world().get::<DodgeRoll>(player).unwrap()
 }

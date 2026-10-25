@@ -4,7 +4,7 @@
 use crate::{
     data::Tuning,
     kinematics::{Position, Velocity},
-    player::{MoveIntent, Player},
+    player::{AimIntent, DodgeIntent, DodgeRoll, MoveIntent, Player},
     schedule::GameSystemSet,
     world::room::Room,
 };
@@ -52,6 +52,9 @@ fn start_run(
     commands.spawn((
         Player,
         MoveIntent::default(),
+        AimIntent::default(),
+        DodgeIntent::default(),
+        DodgeRoll::default(),
         Position(Vec2::ZERO),
         Velocity::default(),
         RunScoped,

@@ -54,6 +54,10 @@ _Avoid_: Implant, cyberware
 
 ## Character
 
+**Dodge Roll**:
+The player's short dash with invincibility frames and a cooldown, on Space or right click. Always say "Dodge Roll" in full: a bare "roll" is a Survival Roll.
+_Avoid_: Dash, dodge
+
 **Sex**:
 The player's biological sex (Male or Female), chosen once before the Run and used as a prerequisite for lore-bound Ascensions.
 _Avoid_: Gender

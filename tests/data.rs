@@ -12,6 +12,11 @@ fn bundled_tuning_parses_and_holds_spec_values() {
     assert_eq!(player.max_hp, 100.0);
     assert_eq!(player.hurt_invulnerability, 0.6);
     assert_eq!(player.radius, 5.0);
+    let roll = &player.dodge_roll;
+    assert_eq!(roll.speed, 260.0);
+    assert_eq!(roll.duration, 0.25);
+    assert_eq!(roll.invincibility, 0.30);
+    assert_eq!(roll.cooldown, 0.8);
 
     assert_eq!(tuning.room.interior_width, 464.0);
     assert_eq!(tuning.room.interior_height, 224.0);

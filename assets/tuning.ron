@@ -7,6 +7,12 @@
         max_hp: 100.0,
         hurt_invulnerability: 0.6,  // s after a hit
         radius: 5.0,                // collision circle at the feet, px
+        dodge_roll: (               // timings in s from the start of the roll
+            speed: 260.0,           // px/s
+            duration: 0.25,
+            invincibility: 0.30,
+            cooldown: 0.8,
+        ),
     ),
     room: (
         interior_width: 464.0,      // px
