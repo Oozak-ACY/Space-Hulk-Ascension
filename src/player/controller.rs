@@ -28,11 +28,21 @@ pub struct AimIntent {
 pub struct DodgeIntent(pub bool);
 
 /// The player's last Dodge Roll. Every phase is timed from its start.
-#[derive(Component, Debug, Default, Clone, Copy, PartialEq)]
+#[derive(Component, Debug, Clone, Copy, PartialEq)]
 pub struct DodgeRoll {
     /// Seconds since the last roll started; `None` before the first.
     since_start: Option<f32>,
+    /// Unit length. Before the first roll, facing the camera.
     direction: Vec2,
+}
+
+impl Default for DodgeRoll {
+    fn default() -> Self {
+        Self {
+            since_start: None,
+            direction: Vec2::NEG_Y,
+        }
+    }
 }
 
 impl DodgeRoll {
@@ -76,7 +86,8 @@ pub(crate) fn plugin(app: &mut App) {
     );
 }
 
-/// Rolls in the movement direction, or toward the aim when standing still.
+/// Rolls in the movement direction, or toward the aim when standing still,
+/// or else the way the last roll went, so a press always rolls.
 fn start_dodge_roll(
     time: Res<Time<Virtual>>,
     tuning: Res<Tuning>,
@@ -88,13 +99,13 @@ fn start_dodge_roll(
         if !std::mem::take(&mut intent.0) || time.is_paused() || !roll.is_ready(tuning) {
             continue;
         }
-        let direction = movement.0.try_normalize().or(aim.direction.try_normalize());
-        if let Some(direction) = direction {
-            *roll = DodgeRoll {
-                since_start: Some(0.0),
-                direction,
-            };
-        }
+        let direction = (movement.0.try_normalize())
+            .or(aim.direction.try_normalize())
+            .unwrap_or(roll.direction);
+        *roll = DodgeRoll {
+            since_start: Some(0.0),
+            direction,
+        };
     }
 }
 

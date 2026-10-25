@@ -44,6 +44,41 @@ fn standing_still_rolls_toward_the_aim() {
 }
 
 #[test]
+fn with_no_movement_or_aim_the_first_roll_faces_the_camera() {
+    let mut app = app_in_run(1);
+    let start = player_position(&mut app);
+
+    request_dodge_roll(&mut app);
+    step(&mut app, 1);
+    let travel = player_position(&mut app) - start;
+    assert!(travel.length() > 0.0, "a pressed roll must fire");
+    assert!(
+        travel.normalize().distance(Vec2::NEG_Y) < 1e-4,
+        "rolled toward {travel}"
+    );
+}
+
+#[test]
+fn with_no_movement_or_aim_a_roll_repeats_the_last_direction() {
+    let mut app = app_in_run(1);
+    let roll = tuning(&app).player.dodge_roll;
+    set_move_intent(&mut app, Vec2::X);
+    request_dodge_roll(&mut app);
+    step(&mut app, 1);
+    set_move_intent(&mut app, Vec2::ZERO);
+    step(&mut app, frames(roll.cooldown) + 30);
+
+    let start = player_position(&mut app);
+    request_dodge_roll(&mut app);
+    step(&mut app, 1);
+    let direction = (player_position(&mut app) - start).normalize();
+    assert!(
+        direction.distance(Vec2::X) < 1e-4,
+        "rolled toward {direction}"
+    );
+}
+
+#[test]
 fn a_roll_covers_speed_times_duration_at_roll_speed() {
     let mut app = app_in_run(1);
     let roll = tuning(&app).player.dodge_roll;
