@@ -13,5 +13,12 @@
         interior_height: 224.0,     // px
         wall_thickness: 8.0,        // px
     ),
+    floor: (
+        min_rooms: 8,
+        max_rooms: 12,
+        grid_width: 9,              // Rooms
+        grid_height: 8,             // Rooms
+        expansion_chance: 0.5,      // per Room, per direction
+    ),
     max_frame_delta: 0.05,          // s; longer frames are clamped so nothing tunnels
 )
