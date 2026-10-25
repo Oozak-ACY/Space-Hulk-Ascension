@@ -62,24 +62,33 @@ fn every_room_is_reachable_from_the_start() {
 }
 
 #[test]
-fn exactly_one_start_boss_and_encounter_room() {
-    for seed in SEEDS {
-        let floor = generate_floor(seed, &bundled());
-        assert_eq!(
-            rooms_of_kind(&floor, RoomKind::Start),
-            vec![floor.start()],
-            "seed {seed}"
-        );
-        assert_eq!(
-            rooms_of_kind(&floor, RoomKind::Boss).len(),
-            1,
-            "seed {seed}"
-        );
-        assert_eq!(
-            rooms_of_kind(&floor, RoomKind::Encounter).len(),
-            1,
-            "seed {seed}"
-        );
+fn exactly_one_start_and_boss_and_the_tuned_encounter_rooms() {
+    for tuning in [bundled(), three_encounters()] {
+        for seed in SEEDS {
+            let floor = generate_floor(seed, &tuning);
+            assert_eq!(
+                rooms_of_kind(&floor, RoomKind::Start),
+                vec![floor.start()],
+                "seed {seed}"
+            );
+            assert_eq!(
+                rooms_of_kind(&floor, RoomKind::Boss).len(),
+                1,
+                "seed {seed}"
+            );
+            assert_eq!(
+                rooms_of_kind(&floor, RoomKind::Encounter).len(),
+                tuning.encounter_rooms,
+                "seed {seed}"
+            );
+        }
+    }
+}
+
+fn three_encounters() -> FloorTuning {
+    FloorTuning {
+        encounter_rooms: 3,
+        ..bundled()
     }
 }
 
@@ -104,23 +113,35 @@ fn boss_room_is_the_dead_end_farthest_from_the_start() {
 }
 
 #[test]
-fn encounter_room_is_another_dead_end_when_one_exists() {
-    for seed in SEEDS {
-        let floor = generate_floor(seed, &bundled());
-        let encounter = rooms_of_kind(&floor, RoomKind::Encounter)[0];
-        let boss = rooms_of_kind(&floor, RoomKind::Boss)[0];
-        assert_ne!(encounter, floor.start(), "seed {seed}");
-        assert_ne!(encounter, boss, "seed {seed}");
-        let spare_dead_end = floor
-            .ids()
-            .any(|id| id != floor.start() && id != boss && is_dead_end(&floor, id));
-        if spare_dead_end {
-            assert!(
-                is_dead_end(&floor, encounter),
-                "seed {seed}: Encounter is not a dead end"
-            );
+fn encounter_rooms_take_spare_dead_ends_first() {
+    // Encounter Rooms are never the Start or Boss, and one sits off a dead
+    // end only when every spare dead end is already an Encounter Room.
+    let mut overflows = 0;
+    for tuning in [bundled(), three_encounters()] {
+        for seed in SEEDS {
+            let floor = generate_floor(seed, &tuning);
+            let boss = rooms_of_kind(&floor, RoomKind::Boss)[0];
+            let spare_dead_ends: Vec<_> = floor
+                .ids()
+                .filter(|&id| id != floor.start() && id != boss && is_dead_end(&floor, id))
+                .collect();
+            let encounters = rooms_of_kind(&floor, RoomKind::Encounter);
+            for &encounter in &encounters {
+                assert_ne!(encounter, floor.start(), "seed {seed}");
+                assert_ne!(encounter, boss, "seed {seed}");
+            }
+            if encounters.iter().any(|&id| !is_dead_end(&floor, id)) {
+                overflows += 1;
+                assert!(
+                    spare_dead_ends
+                        .iter()
+                        .all(|id| floor.room(*id).kind() == RoomKind::Encounter),
+                    "seed {seed}: a spare dead end was skipped"
+                );
+            }
         }
     }
+    assert!(overflows > 0, "no seed ran out of spare dead ends");
 }
 
 #[test]
@@ -276,4 +297,16 @@ fn encounter_falls_back_to_a_combat_room_without_a_spare_dead_end() {
         }
     }
     assert!(fallbacks > 0, "no seed exercised the fallback");
+}
+
+#[test]
+#[should_panic(expected = "Start, a Boss and 2 Encounter Rooms")]
+fn tuning_too_small_for_its_encounter_rooms_is_rejected() {
+    let tuning = FloorTuning {
+        min_rooms: 3,
+        max_rooms: 3,
+        encounter_rooms: 2,
+        ..bundled()
+    };
+    generate_floor(0, &tuning);
 }

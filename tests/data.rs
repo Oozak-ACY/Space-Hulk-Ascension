@@ -21,6 +21,7 @@ fn bundled_tuning_parses_and_holds_spec_values() {
     assert_eq!((floor.min_rooms, floor.max_rooms), (8, 12));
     assert_eq!((floor.grid_width, floor.grid_height), (9, 8));
     assert_eq!(floor.expansion_chance, 0.5);
+    assert_eq!(floor.encounter_rooms, 1);
 
     assert_eq!(tuning.max_frame_delta, 0.05);
 }

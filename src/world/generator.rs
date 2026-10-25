@@ -128,12 +128,18 @@ impl Floor {
 ///
 /// # Panics
 ///
-/// If the tuning cannot hold a Start, Boss and Encounter Room, or its target
-/// Room count is unreachable on its grid.
+/// If the tuning cannot hold a Start, a Boss and its Encounter Rooms, or its
+/// target Room count is unreachable on its grid.
 pub fn generate_floor(seed: u64, tuning: &FloorTuning) -> Floor {
     assert!(
-        3 <= tuning.min_rooms && tuning.min_rooms <= tuning.max_rooms,
-        "Floor tuning needs 3 <= min_rooms <= max_rooms, got {}..={}",
+        2 + tuning.encounter_rooms <= tuning.min_rooms,
+        "Floor tuning needs room for a Start, a Boss and {} Encounter Rooms, got min_rooms {}",
+        tuning.encounter_rooms,
+        tuning.min_rooms,
+    );
+    assert!(
+        tuning.min_rooms <= tuning.max_rooms,
+        "Floor tuning needs min_rooms <= max_rooms, got {}..={}",
         tuning.min_rooms,
         tuning.max_rooms,
     );
@@ -142,7 +148,7 @@ pub fn generate_floor(seed: u64, tuning: &FloorTuning) -> Floor {
     let target = tuning.min_rooms + below(&mut rng, tuning.max_rooms - tuning.min_rooms + 1);
     for _ in 0..MAX_ATTEMPTS {
         if let Some(cells) = grow(&mut rng, tuning, target) {
-            return assign_kinds(&mut rng, cells);
+            return assign_kinds(&mut rng, cells, tuning.encounter_rooms);
         }
     }
     panic!("Floor tuning {tuning:?} never reached its Room count in {MAX_ATTEMPTS} attempts");
@@ -186,8 +192,8 @@ fn grow(rng: &mut fastrand::Rng, tuning: &FloorTuning, target: usize) -> Option<
 }
 
 /// Links doors between grid neighbours and picks the Boss (farthest dead end)
-/// and the Encounter (another dead end when one exists).
-fn assign_kinds(rng: &mut fastrand::Rng, cells: Vec<GridPos>) -> Floor {
+/// and the Encounter Rooms (other dead ends while they last).
+fn assign_kinds(rng: &mut fastrand::Rng, cells: Vec<GridPos>, encounter_rooms: usize) -> Floor {
     let rooms = cells
         .iter()
         .enumerate()
@@ -211,26 +217,32 @@ fn assign_kinds(rng: &mut fastrand::Rng, cells: Vec<GridPos>) -> Floor {
         .ids()
         .filter(|&id| id != floor.start() && floor.room(id).neighbours().count() == 1)
         .collect();
-    // Growth is a tree of at least three Rooms, so it has a dead end besides the Start.
+    // Growth is a tree of at least two Rooms, so it has a dead end besides the Start.
     // `max_by_key` keeps the last maximum; reversing makes ties go to the lowest RoomId.
     let boss = *dead_ends
         .iter()
         .rev()
         .max_by_key(|id| distance[id.0])
-        .expect("a Floor of three or more Rooms has a dead end");
+        .expect("a Floor of two or more Rooms has a dead end");
     floor.rooms[boss.0].kind = RoomKind::Boss;
 
     let spare_dead_ends: Vec<RoomId> = dead_ends.into_iter().filter(|&id| id != boss).collect();
-    let candidates = if spare_dead_ends.is_empty() {
-        floor
-            .ids()
-            .filter(|&id| floor.room(id).kind == RoomKind::Combat)
-            .collect()
-    } else {
-        spare_dead_ends
-    };
-    let encounter = candidates[below(rng, candidates.len())];
-    floor.rooms[encounter.0].kind = RoomKind::Encounter;
+    for id in pick_distinct(rng, spare_dead_ends, encounter_rooms) {
+        floor.rooms[id.0].kind = RoomKind::Encounter;
+    }
+    // Too few spare dead ends: the rest go to Combat Rooms along the paths.
+    let placed = floor
+        .rooms
+        .iter()
+        .filter(|room| room.kind == RoomKind::Encounter)
+        .count();
+    let combat: Vec<RoomId> = floor
+        .ids()
+        .filter(|&id| floor.room(id).kind == RoomKind::Combat)
+        .collect();
+    for id in pick_distinct(rng, combat, encounter_rooms - placed) {
+        floor.rooms[id.0].kind = RoomKind::Encounter;
+    }
     floor
 }
 
@@ -247,6 +259,17 @@ fn distances_from_start(floor: &Floor) -> Vec<usize> {
         }
     }
     distance
+}
+
+/// Up to `n` distinct Rooms drawn uniformly from `from` (a partial Fisher–Yates).
+fn pick_distinct(rng: &mut fastrand::Rng, mut from: Vec<RoomId>, n: usize) -> Vec<RoomId> {
+    let n = n.min(from.len());
+    for k in 0..n {
+        let j = k + below(rng, from.len() - k);
+        from.swap(k, j);
+    }
+    from.truncate(n);
+    from
 }
 
 /// A uniform index in `0..n`. Draws a fixed-width `u32` because fastrand's

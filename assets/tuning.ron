@@ -19,6 +19,7 @@
         grid_width: 9,              // Rooms
         grid_height: 8,             // Rooms
         expansion_chance: 0.5,      // per Room, per direction
+        encounter_rooms: 1,
     ),
     max_frame_delta: 0.05,          // s; longer frames are clamped so nothing tunnels
 )

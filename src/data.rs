@@ -43,6 +43,8 @@ pub struct FloorTuning {
     /// Chance that a Room grows a neighbour in each direction; lower means
     /// sparser, more branching Floors.
     pub expansion_chance: f32,
+    /// Encounter Rooms per Floor, placed on spare dead ends first.
+    pub encounter_rooms: usize,
 }
 
 impl RoomTuning {
