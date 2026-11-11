@@ -3,6 +3,7 @@
 
 use super::camera::{ScreenCamera, WorldCamera, cursor_to_world};
 use crate::{
+    combat::FireIntent,
     kinematics::Position,
     pause::PauseRequest,
     player::{AimIntent, DodgeIntent, MoveIntent, Player},
@@ -20,6 +21,7 @@ const RIGHT: [KeyCode; 2] = [KeyCode::KeyD, KeyCode::ArrowRight];
 const PAUSE: [KeyCode; 2] = [KeyCode::KeyP, KeyCode::Escape];
 const DODGE_ROLL_KEY: KeyCode = KeyCode::Space;
 const DODGE_ROLL_BUTTON: MouseButton = MouseButton::Right;
+const FIRE_BUTTON: MouseButton = MouseButton::Left;
 
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(
@@ -28,6 +30,7 @@ pub(super) fn plugin(app: &mut App) {
             write_move_intent,
             write_aim_intent,
             write_dodge_intent,
+            write_fire_intent,
             request_pause,
         )
             .in_set(GameSystemSet::InputAndIntent),
@@ -72,6 +75,14 @@ fn write_dodge_intent(
         for mut intent in &mut intents {
             intent.0 = true;
         }
+    }
+}
+
+/// Held: firing continues for as long as the button is down.
+fn write_fire_intent(buttons: Res<ButtonInput<MouseButton>>, mut intents: Query<&mut FireIntent>) {
+    let held = buttons.pressed(FIRE_BUTTON);
+    for mut intent in &mut intents {
+        intent.0 = held;
     }
 }
 

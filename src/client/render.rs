@@ -1,9 +1,15 @@
 //! Placeholder drawing following the three-quarter view rules (spec v3 §7):
 //! sprites anchored at the feet, draw order sorted by Y, the top wall
 //! showing its front face and the other walls only their top edge.
+//! Weapons and bolts sit at chest height, bolts over a ground shadow.
 
 use crate::{
-    data::Tuning, kinematics::Position, player::Player, schedule::GameSystemSet, world::room::Room,
+    combat::Projectile,
+    data::Tuning,
+    kinematics::{Position, Velocity},
+    player::{AimIntent, Player},
+    schedule::GameSystemSet,
+    world::room::Room,
 };
 use bevy::{prelude::*, sprite::Anchor};
 
@@ -12,11 +18,21 @@ const FLOOR_GRID: Color = Color::srgb(0.129, 0.137, 0.161);
 const WALL_EDGE: Color = Color::srgb(0.227, 0.239, 0.271);
 const WALL_FACE: Color = Color::srgb(0.302, 0.322, 0.357);
 const MORTAL: Color = Color::srgb(0.624, 0.827, 0.561);
+const WEAPON: Color = Color::srgb(0.420, 0.447, 0.494);
+const LAS_BOLT: Color = Color::srgb(1.0, 0.478, 0.361);
+const SHADOW: Color = Color::srgba(0.0, 0.0, 0.0, 0.35);
 
 const FLOOR_GRID_STEP: f32 = 16.0;
 /// Side and bottom walls show only this much of their top edge.
 const WALL_TOP_EDGE: f32 = 3.0;
 const MORTAL_SIZE: Vec2 = Vec2::new(10.0, 16.0);
+/// Height above the feet where weapons are held and bolts fly.
+const CHEST_HEIGHT: f32 = 9.0;
+const WEAPON_SIZE: Vec2 = Vec2::new(8.0, 2.0);
+const LAS_BOLT_SIZE: Vec2 = Vec2::new(6.0, 2.0);
+const SHADOW_SIZE: Vec2 = Vec2::new(4.0, 1.0);
+/// In front of or behind its holder.
+const WEAPON_DEPTH: f32 = 0.0001;
 
 const Z_FLOOR: f32 = 0.0;
 const Z_FLOOR_GRID: f32 = 0.1;
@@ -28,7 +44,13 @@ const Y_SORT_SCALE: f32 = 0.001;
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(
         Update,
-        (draw_new_rooms, draw_new_players, sync_positions)
+        (
+            draw_new_rooms,
+            draw_new_players,
+            draw_new_projectiles,
+            sync_positions,
+            point_weapons,
+        )
             .chain()
             .in_set(GameSystemSet::RenderSync),
     );
@@ -117,13 +139,66 @@ fn draw_new_rooms(
     }
 }
 
+/// Points at the aim, pivoting at the chest.
+#[derive(Component)]
+struct WeaponSprite;
+
 fn draw_new_players(players: Query<Entity, Added<Player>>, mut commands: Commands) {
     for entity in &players {
-        commands.entity(entity).insert((
-            Sprite::from_color(MORTAL, MORTAL_SIZE),
-            Anchor::BOTTOM_CENTER,
-            Transform::default(),
-        ));
+        commands
+            .entity(entity)
+            .insert((
+                Sprite::from_color(MORTAL, MORTAL_SIZE),
+                Anchor::BOTTOM_CENTER,
+                Transform::default(),
+            ))
+            .with_child((
+                WeaponSprite,
+                Sprite::from_color(WEAPON, WEAPON_SIZE),
+                Anchor::CENTER_LEFT,
+                Transform::from_xyz(0.0, CHEST_HEIGHT, WEAPON_DEPTH),
+            ));
+    }
+}
+
+/// A shadow on the ground, the bolt itself at chest height.
+fn draw_new_projectiles(
+    projectiles: Query<(Entity, &Velocity), Added<Projectile>>,
+    mut commands: Commands,
+) {
+    for (entity, velocity) in &projectiles {
+        commands
+            .entity(entity)
+            .insert((
+                Sprite::from_color(SHADOW, SHADOW_SIZE),
+                Transform::default(),
+            ))
+            .with_child((
+                Sprite::from_color(LAS_BOLT, LAS_BOLT_SIZE),
+                Transform::from_xyz(0.0, CHEST_HEIGHT, 0.0)
+                    .with_rotation(Quat::from_rotation_z(velocity.0.to_angle())),
+            ));
+    }
+}
+
+/// Held in front of the body, except when aiming up the screen.
+fn point_weapons(
+    players: Query<&AimIntent, With<Player>>,
+    mut weapons: Query<(&ChildOf, &mut Transform), With<WeaponSprite>>,
+) {
+    for (holder, mut transform) in &mut weapons {
+        let Ok(aim) = players.get(holder.parent()) else {
+            continue;
+        };
+        if aim.direction == Vec2::ZERO {
+            continue;
+        }
+        transform.rotation = Quat::from_rotation_z(aim.direction.to_angle());
+        transform.translation.z = if aim.direction.y > 0.0 {
+            -WEAPON_DEPTH
+        } else {
+            WEAPON_DEPTH
+        };
     }
 }
 

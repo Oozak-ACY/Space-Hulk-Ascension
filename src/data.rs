@@ -1,10 +1,12 @@
 //! Bundled data files, compiled into the binary (ADR 0003, WASM first) and
 //! deserialized into resources.
 
-use bevy::prelude::*;
+use crate::combat::DamageType;
+use bevy::{platform::collections::HashMap, prelude::*};
 use serde::Deserialize;
 
 const TUNING_RON: &str = include_str!("../assets/tuning.ron");
+const WEAPONS_RON: &str = include_str!("../assets/weapons.ron");
 
 /// Global balance values from `assets/tuning.ron`.
 #[derive(Resource, Debug, Clone, Deserialize)]
@@ -23,6 +25,8 @@ pub struct PlayerTuning {
     pub max_hp: f32,
     pub hurt_invulnerability: f32,
     pub radius: f32,
+    /// Weapon id in `weapons.ron` every Run starts with.
+    pub starting_weapon: String,
     pub dodge_roll: DodgeRollTuning,
 }
 
@@ -71,5 +75,54 @@ impl Tuning {
     /// Parses the bundled `tuning.ron`.
     pub fn bundled() -> Result<Self, ron::error::SpannedError> {
         ron::from_str(TUNING_RON)
+    }
+}
+
+/// Every weapon from `assets/weapons.ron`, by weapon id.
+#[derive(Resource, Debug, Clone, Deserialize)]
+#[serde(transparent)]
+pub struct Weapons(HashMap<String, WeaponData>);
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct WeaponData {
+    /// Shown on the HUD.
+    pub name: String,
+    pub damage: f32,
+    pub damage_type: DamageType,
+    /// Seconds between shots while fire is held.
+    pub interval: f32,
+    /// Projectile speed, px/s.
+    pub speed: f32,
+    /// Full cone width in degrees: each shot strays up to half of it either side of the aim.
+    pub spread: f32,
+    pub projectile_radius: f32,
+    pub profile: WeaponProfile,
+}
+
+/// What stops a weapon firing forever.
+#[derive(Debug, Clone, Copy, Deserialize)]
+pub enum WeaponProfile {
+    Overheat(OverheatData),
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+pub struct OverheatData {
+    pub heat_per_shot: f32,
+    /// Reaching it overheats the weapon.
+    pub max_heat: f32,
+    /// Heat lost per second.
+    pub cooling: f32,
+    /// Seconds unable to fire after overheating; heat is 0 afterwards.
+    pub lockout: f32,
+}
+
+impl Weapons {
+    /// Parses the bundled `weapons.ron`.
+    pub fn bundled() -> Result<Self, ron::error::SpannedError> {
+        ron::from_str(WEAPONS_RON)
+    }
+
+    pub fn get(&self, id: &str) -> Option<&WeaponData> {
+        self.0.get(id)
     }
 }

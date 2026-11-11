@@ -5,6 +5,7 @@
 //! world. Tests drive the gameplay plugin alone through [`headless::app`].
 
 pub mod client;
+pub mod combat;
 pub mod data;
 pub mod headless;
 pub mod kinematics;
@@ -22,11 +23,15 @@ pub struct GameplayPlugin;
 impl Plugin for GameplayPlugin {
     fn build(&self, app: &mut App) {
         let tuning = data::Tuning::bundled().expect("bundled tuning.ron is valid");
-        app.insert_resource(tuning).add_plugins((
-            schedule::plugin,
-            pause::plugin,
-            run::plugin,
-            player::plugin,
-        ));
+        let weapons = data::Weapons::bundled().expect("bundled weapons.ron is valid");
+        app.insert_resource(tuning)
+            .insert_resource(weapons)
+            .add_plugins((
+                schedule::plugin,
+                pause::plugin,
+                run::plugin,
+                player::plugin,
+                combat::plugin,
+            ));
     }
 }

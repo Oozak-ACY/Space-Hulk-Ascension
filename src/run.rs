@@ -2,6 +2,7 @@
 //! sets up a fresh Run.
 
 use crate::{
+    combat::{FireIntent, ShotRng, Weapon},
     data::Tuning,
     kinematics::{Position, Velocity},
     player::{AimIntent, DodgeIntent, DodgeRoll, MoveIntent, Player},
@@ -41,7 +42,9 @@ fn start_run(
     for entity in &run_scoped {
         commands.entity(entity).despawn();
     }
-    commands.insert_resource(RunSeed(request.seed.unwrap_or_else(|| fastrand::u64(..))));
+    let seed = request.seed.unwrap_or_else(|| fastrand::u64(..));
+    commands.insert_resource(RunSeed(seed));
+    commands.insert_resource(ShotRng(fastrand::Rng::with_seed(seed)));
 
     commands.spawn((
         Room {
@@ -55,6 +58,8 @@ fn start_run(
         AimIntent::default(),
         DodgeIntent::default(),
         DodgeRoll::default(),
+        FireIntent::default(),
+        Weapon::new(tuning.player.starting_weapon.clone()),
         Position(Vec2::ZERO),
         Velocity::default(),
         RunScoped,

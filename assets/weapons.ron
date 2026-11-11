@@ -1,0 +1,19 @@
+// Weapon definitions, keyed by weapon id (ADR 0003). Initial values are
+// spec v3 §9.1, validated by the combat-feel prototype.
+{
+    "laspistol": (
+        name: "Laspistol",
+        damage: 10.0,
+        damage_type: Energy,
+        interval: 0.20,             // s between shots while fire is held
+        speed: 360.0,               // px/s
+        spread: 4.0,                // full cone in degrees: shots stray up to half of it either side
+        projectile_radius: 2.0,     // px
+        profile: Overheat((
+            heat_per_shot: 15.0,
+            max_heat: 100.0,        // reaching it overheats
+            cooling: 40.0,          // heat lost per s
+            lockout: 1.0,           // s unable to fire after overheating; heat is 0 afterwards
+        )),
+    ),
+}
