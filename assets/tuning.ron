@@ -34,8 +34,8 @@
     ),
     spawns: (
         min_distance: 100.0,        // px from the player
-        wave_enemy: "cultist_rusher", // id in enemies.ron
-        wave_size: 4,               // the Run's opening wave, until Rooms have their own fights
+        // The Run's opening wave (ids in enemies.ron), until Rooms have their own fights.
+        wave: ["cultist_rusher", "cultist_rusher", "cultist_rusher", "cultist_gunner", "cultist_gunner"],
     ),
     juice: (
         shake_on_hit: 1.0,          // px

@@ -14,4 +14,23 @@
             recoil: 120.0,          // px/s it bounces back after hurting the player
         )),
     ),
+    "cultist_gunner": (
+        name: "Cultist Gunner",
+        max_hp: 25.0,
+        speed: 50.0,                // px/s
+        steering: 6.0,              // 1/s approach toward its wanted velocity
+        radius: 6.0,                // px
+        behaviour: Gunner((
+            range: 120.0,           // px it keeps from the player
+            range_tolerance: 20.0,  // px either side of the range where it strafes
+            strafe_switch_min: 1.0, // s between strafing direction switches, rolled
+            strafe_switch_max: 2.5,
+            interval: 1.2,          // s from one aim warning to the next
+            aim_warning: 0.35,      // s the warning shows; the aim is locked at its start
+            bullet_speed: 160.0,    // px/s
+            bullet_damage: 6.0,
+            bullet_damage_type: Physical,
+            bullet_radius: 2.0,     // px
+        )),
+    ),
 }

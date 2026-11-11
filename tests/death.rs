@@ -102,7 +102,7 @@ fn a_new_run_from_game_over_starts_fresh() {
     assert_eq!(health.current(), t.player.max_hp);
     let weapon = player_weapon(&mut app);
     assert_eq!(weapon.id(), t.player.starting_weapon);
-    assert_eq!(enemies(&mut app).len(), t.spawns.wave_size);
+    assert_eq!(enemies(&mut app).len(), t.spawns.wave.len());
 
     // And it plays: the fresh player walks.
     set_move_intent(&mut app, Vec2::X);

@@ -4,9 +4,9 @@
 //! Weapons and bolts sit at chest height, bolts over a ground shadow.
 
 use crate::{
-    combat::{HitFlash, HurtInvulnerability, Projectile},
+    combat::{HitFlash, Hits, HurtInvulnerability, Projectile},
     data::Tuning,
-    enemies::Enemy,
+    enemies::{Enemy, gunner::Gunner},
     kinematics::{Position, Velocity},
     player::{AimIntent, Player},
     schedule::GameSystemSet,
@@ -20,22 +20,28 @@ const WALL_EDGE: Color = Color::srgb(0.227, 0.239, 0.271);
 const WALL_FACE: Color = Color::srgb(0.302, 0.322, 0.357);
 const MORTAL: Color = Color::srgb(0.624, 0.827, 0.561);
 const RUSHER: Color = Color::srgb(0.753, 0.224, 0.169);
+const GUNNER: Color = Color::srgb(0.612, 0.341, 0.659);
+const AIM_WARNING: Color = Color::srgba(1.0, 0.2, 0.2, 0.7);
 const FLASH: Color = Color::WHITE;
 const WEAPON: Color = Color::srgb(0.420, 0.447, 0.494);
 const LAS_BOLT: Color = Color::srgb(1.0, 0.478, 0.361);
+const ENEMY_BULLET: Color = Color::srgb(1.0, 0.851, 0.302);
 const SHADOW: Color = Color::srgba(0.0, 0.0, 0.0, 0.35);
 
 const FLOOR_GRID_STEP: f32 = 16.0;
 /// Side and bottom walls show only this much of their top edge.
 const WALL_TOP_EDGE: f32 = 3.0;
 const MORTAL_SIZE: Vec2 = Vec2::new(10.0, 16.0);
-const RUSHER_SIZE: Vec2 = Vec2::new(12.0, 14.0);
+const ENEMY_SIZE: Vec2 = Vec2::new(12.0, 14.0);
 /// Times per second the player blinks while invulnerable after a hit.
 const HURT_BLINK_RATE: f32 = 20.0;
 /// Height above the feet where weapons are held and bolts fly.
 const CHEST_HEIGHT: f32 = 9.0;
 const WEAPON_SIZE: Vec2 = Vec2::new(8.0, 2.0);
 const LAS_BOLT_SIZE: Vec2 = Vec2::new(6.0, 2.0);
+const ENEMY_BULLET_SIZE: Vec2 = Vec2::new(3.0, 3.0);
+/// The aim warning: a thin line from the gunner's chest along its locked aim.
+const AIM_WARNING_SIZE: Vec2 = Vec2::new(48.0, 1.0);
 const SHADOW_SIZE: Vec2 = Vec2::new(4.0, 1.0);
 /// In front of or behind its holder.
 const WEAPON_DEPTH: f32 = 0.0001;
@@ -57,6 +63,7 @@ pub(super) fn plugin(app: &mut App) {
             draw_new_projectiles,
             sync_positions,
             point_weapons,
+            show_aim_warnings,
             flash_when_hit,
             blink_while_invulnerable,
         )
@@ -175,14 +182,47 @@ fn draw_new_players(players: Query<Entity, Added<Player>>, mut commands: Command
     }
 }
 
-fn draw_new_enemies(enemies: Query<Entity, Added<Enemy>>, mut commands: Commands) {
-    for entity in &enemies {
-        commands.entity(entity).insert((
-            Sprite::from_color(RUSHER, RUSHER_SIZE),
-            BaseColor(RUSHER),
+/// Shows a gunner's locked aim while its aim warning lasts.
+#[derive(Component)]
+struct AimWarningSprite;
+
+fn draw_new_enemies(enemies: Query<(Entity, Has<Gunner>), Added<Enemy>>, mut commands: Commands) {
+    for (entity, is_gunner) in &enemies {
+        let color = if is_gunner { GUNNER } else { RUSHER };
+        let mut enemy = commands.entity(entity);
+        enemy.insert((
+            Sprite::from_color(color, ENEMY_SIZE),
+            BaseColor(color),
             Anchor::BOTTOM_CENTER,
             Transform::default(),
         ));
+        if is_gunner {
+            enemy.with_child((
+                AimWarningSprite,
+                Sprite::from_color(AIM_WARNING, AIM_WARNING_SIZE),
+                Anchor::CENTER_LEFT,
+                Transform::from_xyz(0.0, CHEST_HEIGHT, WEAPON_DEPTH),
+                Visibility::Hidden,
+            ));
+        }
+    }
+}
+
+fn show_aim_warnings(
+    gunners: Query<&Gunner>,
+    mut lines: Query<(&ChildOf, &mut Transform, &mut Visibility), With<AimWarningSprite>>,
+) {
+    for (holder, mut transform, mut visibility) in &mut lines {
+        let Ok(gunner) = gunners.get(holder.parent()) else {
+            continue;
+        };
+        match gunner.aim_warning() {
+            Some(direction) => {
+                transform.rotation = Quat::from_rotation_z(direction.to_angle());
+                *visibility = Visibility::Inherited;
+            }
+            None => *visibility = Visibility::Hidden,
+        }
     }
 }
 
@@ -204,12 +244,16 @@ fn blink_while_invulnerable(mut players: Query<(&HurtInvulnerability, &mut Visib
     }
 }
 
-/// A shadow on the ground, the bolt itself at chest height.
+/// A shadow on the ground, the bolt or bullet itself at chest height.
 fn draw_new_projectiles(
-    projectiles: Query<(Entity, &Velocity), Added<Projectile>>,
+    projectiles: Query<(Entity, &Projectile, &Velocity), Added<Projectile>>,
     mut commands: Commands,
 ) {
-    for (entity, velocity) in &projectiles {
+    for (entity, projectile, velocity) in &projectiles {
+        let (color, size) = match projectile.hits {
+            Hits::Enemies => (LAS_BOLT, LAS_BOLT_SIZE),
+            Hits::Player => (ENEMY_BULLET, ENEMY_BULLET_SIZE),
+        };
         commands
             .entity(entity)
             .insert((
@@ -217,7 +261,7 @@ fn draw_new_projectiles(
                 Transform::default(),
             ))
             .with_child((
-                Sprite::from_color(LAS_BOLT, LAS_BOLT_SIZE),
+                Sprite::from_color(color, size),
                 Transform::from_xyz(0.0, CHEST_HEIGHT, 0.0)
                     .with_rotation(Quat::from_rotation_z(velocity.0.to_angle())),
             ));

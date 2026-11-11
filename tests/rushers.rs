@@ -14,22 +14,27 @@ fn frames(seconds: f32) -> usize {
 }
 
 #[test]
-fn a_run_opens_with_a_wave_of_rushers_away_from_the_player() {
+fn a_run_opens_with_its_wave_away_from_the_player() {
+    let catalog = Enemies::bundled().unwrap();
     for seed in 0..20 {
         let mut app = app_in_run_with_wave(seed);
         let spawns = tuning(&app).spawns;
         let player = player_position(&mut app);
         let interior = room_interior(&mut app);
         let wave = enemies(&mut app);
-        assert_eq!(wave.len(), spawns.wave_size);
-        for rusher in wave {
-            assert_eq!(rusher.id, RUSHER);
-            assert_eq!(rusher.hp, 30.0);
-            assert!(interior.contains(rusher.position));
+        let mut ids: Vec<String> = wave.iter().map(|enemy| enemy.id.clone()).collect();
+        ids.sort();
+        let mut wanted = spawns.wave.clone();
+        wanted.sort();
+        assert_eq!(ids, wanted);
+        assert!(ids.iter().any(|id| id == RUSHER));
+        for enemy in wave {
+            assert_eq!(enemy.hp, catalog.get(&enemy.id).unwrap().max_hp);
+            assert!(interior.contains(enemy.position));
             assert!(
-                rusher.position.distance(player) >= spawns.min_distance,
+                enemy.position.distance(player) >= spawns.min_distance,
                 "seed {seed}: spawned {} px away",
-                rusher.position.distance(player)
+                enemy.position.distance(player)
             );
         }
     }
@@ -54,7 +59,10 @@ fn a_rusher_charges_the_player_at_its_speed() {
 fn rusher_contact_hurts_the_player_once_per_cooldown() {
     let mut app = app_in_run(1);
     let EnemyBehaviour::Rusher(contact) =
-        Enemies::bundled().unwrap().get(RUSHER).unwrap().behaviour;
+        Enemies::bundled().unwrap().get(RUSHER).unwrap().behaviour
+    else {
+        panic!("the rusher is a Rusher");
+    };
     let max_hp = tuning(&app).player.max_hp;
     spawn_enemy(&mut app, RUSHER, Vec2::new(20.0, 0.0));
 

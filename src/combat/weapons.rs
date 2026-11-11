@@ -20,8 +20,9 @@ pub struct FireIntent(pub bool);
 #[derive(Message, Debug, Clone, PartialEq)]
 pub struct ShotRequest {
     pub shooter: Entity,
-    /// The weapon id it leaves.
-    pub weapon: String,
+    /// The weapon id it leaves; enemies fire without one.
+    pub weapon: Option<String>,
+    pub hits: Hits,
     pub origin: Vec2,
     /// Unit length; the aim before spread.
     pub direction: Vec2,
@@ -32,6 +33,15 @@ pub struct ShotRequest {
     pub damage: f32,
     pub damage_type: DamageType,
     pub radius: f32,
+}
+
+/// Who a shot can hurt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Hits {
+    /// The player's shots.
+    Enemies,
+    /// Enemy bullets.
+    Player,
 }
 
 /// The weapon in hand and its state; its stats are the [`WeaponData`] under `id`.
@@ -161,7 +171,8 @@ fn pull_triggers(
         }
         shots.write(ShotRequest {
             shooter,
-            weapon: weapon.id.clone(),
+            weapon: Some(weapon.id.clone()),
+            hits: Hits::Enemies,
             origin: position.0,
             // Aiming at one's own feet shoots toward the camera.
             direction: aim.direction.try_normalize().unwrap_or(Vec2::NEG_Y),

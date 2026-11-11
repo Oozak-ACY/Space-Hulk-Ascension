@@ -9,7 +9,7 @@ use bevy::{
 use space_hulk_ascension::{
     combat::{DamageRequest, DamageType, FireIntent, Health, Projectile, Weapon},
     data::{Tuning, WeaponData, Weapons},
-    enemies::{Enemy, SpawnEnemy},
+    enemies::{Enemy, SpawnEnemy, gunner::Gunner},
     headless,
     kinematics::{Position, Velocity},
     player::{AimIntent, DodgeIntent, DodgeRoll, MoveIntent, Player},
@@ -161,6 +161,15 @@ pub fn step_counting_shots(app: &mut App, frames: usize) -> Vec<usize> {
 }
 
 pub const RUSHER: &str = "cultist_rusher";
+pub const GUNNER: &str = "cultist_gunner";
+
+pub fn gunner(app: &App, entity: Entity) -> Gunner {
+    app.world().get::<Gunner>(entity).expect("a gunner").clone()
+}
+
+pub fn despawn(app: &mut App, entity: Entity) {
+    app.world_mut().despawn(entity);
+}
 
 #[derive(Debug, Clone)]
 pub struct EnemyState {

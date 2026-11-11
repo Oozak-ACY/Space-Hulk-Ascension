@@ -52,7 +52,9 @@ pub(super) fn touch(
     for (enemy, position, mut cooldown, mut knockback) in &mut rushers {
         cooldown.0 = (cooldown.0 - dt).max(0.0);
         let data = catalog.get(enemy.id()).expect("enemy id in enemies.ron");
-        let EnemyBehaviour::Rusher(contact) = data.behaviour;
+        let EnemyBehaviour::Rusher(contact) = data.behaviour else {
+            continue;
+        };
         let reach = data.radius + tuning.player.radius;
         if cooldown.0 > 0.0 || position.0.distance(target_position.0) >= reach {
             continue;

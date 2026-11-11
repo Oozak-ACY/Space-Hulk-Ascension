@@ -60,16 +60,38 @@ fn bundled_enemies_parse_and_hold_spec_values() {
         .expect("the rusher is defined");
     assert_eq!(rusher.max_hp, 30.0);
     assert_eq!(rusher.speed, 70.0);
-    let EnemyBehaviour::Rusher(contact) = rusher.behaviour;
+    let EnemyBehaviour::Rusher(contact) = rusher.behaviour else {
+        panic!("the rusher is a Rusher");
+    };
     assert_eq!(contact.damage, 10.0);
     assert!(contact.cooldown > 0.0);
+
+    let gunner = enemies
+        .get("cultist_gunner")
+        .expect("the gunner is defined");
+    assert_eq!(gunner.max_hp, 25.0);
+    assert_eq!(gunner.speed, 50.0);
+    let EnemyBehaviour::Gunner(shooting) = gunner.behaviour else {
+        panic!("the gunner is a Gunner");
+    };
+    assert_eq!(shooting.range, 120.0);
+    assert!(shooting.range_tolerance > 0.0 && shooting.range_tolerance < shooting.range);
+    assert!(shooting.strafe_switch_min > 0.0);
+    assert!(shooting.strafe_switch_max >= shooting.strafe_switch_min);
+    assert_eq!(shooting.interval, 1.2);
+    assert_eq!(shooting.aim_warning, 0.35);
+    assert_eq!(shooting.bullet_speed, 160.0);
+    assert_eq!(shooting.bullet_damage, 6.0);
 }
 
 #[test]
-fn the_opening_wave_enemy_exists() {
+fn the_opening_wave_enemies_exist() {
     let tuning = Tuning::bundled().unwrap();
     let enemies = Enemies::bundled().unwrap();
-    assert!(enemies.get(&tuning.spawns.wave_enemy).is_some());
+    assert!(!tuning.spawns.wave.is_empty());
+    for id in &tuning.spawns.wave {
+        assert!(enemies.get(id).is_some(), "{id} is not in enemies.ron");
+    }
 }
 
 #[test]

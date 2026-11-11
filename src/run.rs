@@ -4,7 +4,7 @@
 use crate::{
     combat::{FireIntent, Health, HitFlash, HurtInvulnerability, ShotRng, Weapon},
     data::Tuning,
-    enemies::SpawnRng,
+    enemies::{AiRng, SpawnRng},
     kinematics::{Position, Velocity},
     player::{AimIntent, DodgeIntent, DodgeRoll, MoveIntent, Player},
     schedule::GameSystemSet,
@@ -38,8 +38,10 @@ pub struct Depth {
 #[derive(Resource, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RunSeed(pub u64);
 
-/// Mixed into the Run seed so spawns and shot spread draw different numbers.
+/// Mixed into the Run seed so spawns, enemy choices and shot spread draw
+/// different numbers.
 const SPAWN_STREAM: u64 = 0x5EED_5EED_5EED_5EED;
+const AI_STREAM: u64 = 0xA1A1_A1A1_A1A1_A1A1;
 
 /// Despawned when a new Run starts.
 #[derive(Component, Debug, Default)]
@@ -70,6 +72,7 @@ pub(crate) fn start_run(
     commands.insert_resource(RunSeed(seed));
     commands.insert_resource(ShotRng(fastrand::Rng::with_seed(seed)));
     commands.insert_resource(SpawnRng(fastrand::Rng::with_seed(seed ^ SPAWN_STREAM)));
+    commands.insert_resource(AiRng(fastrand::Rng::with_seed(seed ^ AI_STREAM)));
 
     commands.spawn((
         Room {

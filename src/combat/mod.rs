@@ -11,7 +11,7 @@ pub use health::{
     HurtInvulnerability,
 };
 pub use projectile::{Projectile, ShotRng};
-pub use weapons::{FireIntent, ShotRequest, Weapon};
+pub use weapons::{FireIntent, Hits, ShotRequest, Weapon};
 
 use bevy::prelude::*;
 

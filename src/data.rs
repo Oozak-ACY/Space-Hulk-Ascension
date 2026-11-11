@@ -47,10 +47,8 @@ pub struct CombatTuning {
 pub struct SpawnTuning {
     /// Enemies never appear closer than this to the player, px.
     pub min_distance: f32,
-    /// Enemy id in `enemies.ron` the opening wave is made of.
-    pub wave_enemy: String,
-    /// Enemies in the opening wave of a Run.
-    pub wave_size: usize,
+    /// Enemy ids in `enemies.ron`, one per enemy in the Run's opening wave.
+    pub wave: Vec<String>,
 }
 
 /// Screen shake (px), freeze frames (s), hit flashes (s) and knockback.
@@ -195,6 +193,34 @@ pub struct EnemyData {
 pub enum EnemyBehaviour {
     /// Charges the player and hurts on contact.
     Rusher(ContactData),
+    /// Keeps its distance, strafes, and fires telegraphed bullets.
+    Gunner(GunnerData),
+}
+
+/// How a gunner keeps its distance and shoots.
+#[derive(Debug, Clone, Copy, Deserialize)]
+pub struct GunnerData {
+    /// Distance it keeps from the player, px.
+    pub range: f32,
+    /// How far from its range it strafes rather than approaching or
+    /// backing off, px; it blends between the two across this band.
+    pub range_tolerance: f32,
+    /// Fewest seconds between switches of strafing direction.
+    pub strafe_switch_min: f32,
+    /// Most seconds between switches of strafing direction.
+    pub strafe_switch_max: f32,
+    /// Seconds from one aim warning to the next.
+    pub interval: f32,
+    /// Seconds the aim warning shows before the shot; the shot's direction
+    /// is locked when the warning starts.
+    pub aim_warning: f32,
+    /// px/s.
+    pub bullet_speed: f32,
+    /// Damage of each bullet, before Resistances.
+    pub bullet_damage: f32,
+    pub bullet_damage_type: DamageType,
+    /// Collision circle, px.
+    pub bullet_radius: f32,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
