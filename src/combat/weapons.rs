@@ -17,9 +17,11 @@ pub struct FireIntent(pub bool);
 /// A shot leaving a weapon, before the projectile exists and before spread
 /// is rolled. Shot modifiers (Blessings) will hook in between this and the
 /// projectile spawner.
-#[derive(Message, Debug, Clone, Copy, PartialEq)]
+#[derive(Message, Debug, Clone, PartialEq)]
 pub struct ShotRequest {
     pub shooter: Entity,
+    /// The weapon id it leaves.
+    pub weapon: String,
     pub origin: Vec2,
     /// Unit length; the aim before spread.
     pub direction: Vec2,
@@ -159,6 +161,7 @@ fn pull_triggers(
         }
         shots.write(ShotRequest {
             shooter,
+            weapon: weapon.id.clone(),
             origin: position.0,
             // Aiming at one's own feet shoots toward the camera.
             direction: aim.direction.try_normalize().unwrap_or(Vec2::NEG_Y),

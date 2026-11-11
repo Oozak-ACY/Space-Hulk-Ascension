@@ -2,7 +2,7 @@
 //! which is shown on screen scaled by a whole number with nearest-neighbour
 //! filtering.
 
-use crate::{schedule::GameSystemSet, world::room::Room};
+use crate::{juice::ScreenShake, schedule::GameSystemSet, world::room::Room};
 use bevy::{
     camera::{RenderTarget, visibility::RenderLayers},
     prelude::*,
@@ -106,8 +106,14 @@ pub(super) fn cursor_to_world(
         .then(|| world_camera.translation.truncate() + on_canvas)
 }
 
-/// Fixed camera per Room: the Room fills the view below the HUD band.
-fn frame_room(room: Single<&Room>, mut camera: Single<&mut Transform, With<WorldCamera>>) {
+/// Fixed camera per Room: the Room fills the view below the HUD band,
+/// jolted by whole pixels while the screen shakes.
+fn frame_room(
+    room: Single<&Room>,
+    shake: Res<ScreenShake>,
+    mut camera: Single<&mut Transform, With<WorldCamera>>,
+) {
     let centre = room.interior.center() + Vec2::Y * HUD_HEIGHT / 2.0;
-    camera.translation = centre.round().extend(camera.translation.z);
+    let jolt = Vec2::new(fastrand::f32() * 2.0 - 1.0, fastrand::f32() * 2.0 - 1.0) * shake.0;
+    camera.translation = (centre + jolt).round().extend(camera.translation.z);
 }

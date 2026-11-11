@@ -1,12 +1,13 @@
 //! Bundled data files, compiled into the binary (ADR 0003, WASM first) and
 //! deserialized into resources.
 
-use crate::combat::DamageType;
+use crate::combat::{DamageType, Resistances};
 use bevy::{platform::collections::HashMap, prelude::*};
 use serde::Deserialize;
 
 const TUNING_RON: &str = include_str!("../assets/tuning.ron");
 const WEAPONS_RON: &str = include_str!("../assets/weapons.ron");
+const ENEMIES_RON: &str = include_str!("../assets/enemies.ron");
 
 /// Global balance values from `assets/tuning.ron`.
 #[derive(Resource, Debug, Clone, Deserialize)]
@@ -14,6 +15,9 @@ pub struct Tuning {
     pub player: PlayerTuning,
     pub room: RoomTuning,
     pub floor: FloorTuning,
+    pub combat: CombatTuning,
+    pub spawns: SpawnTuning,
+    pub juice: JuiceTuning,
     /// Longest frame the gameplay clock will advance by, in seconds.
     pub max_frame_delta: f32,
 }
@@ -28,6 +32,45 @@ pub struct PlayerTuning {
     /// Weapon id in `weapons.ron` every Run starts with.
     pub starting_weapon: String,
     pub dodge_roll: DodgeRollTuning,
+    #[serde(default)]
+    pub resistances: Resistances,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CombatTuning {
+    /// The most of any damage type a Resistance can ignore, however stacked.
+    pub max_resistance: f32,
+}
+
+/// Where enemies appear in a Room.
+#[derive(Debug, Clone, Deserialize)]
+pub struct SpawnTuning {
+    /// Enemies never appear closer than this to the player, px.
+    pub min_distance: f32,
+    /// Enemy id in `enemies.ron` the opening wave is made of.
+    pub wave_enemy: String,
+    /// Enemies in the opening wave of a Run.
+    pub wave_size: usize,
+}
+
+/// Screen shake (px), freeze frames (s), hit flashes (s) and knockback.
+#[derive(Debug, Clone, Deserialize)]
+pub struct JuiceTuning {
+    pub shake_on_hit: f32,
+    pub shake_on_kill: f32,
+    pub shake_on_hurt: f32,
+    /// Shake lost per second.
+    pub shake_decay: f32,
+    pub freeze_on_kill: f32,
+    pub freeze_on_hurt: f32,
+    /// How long a hit enemy flashes white.
+    pub hit_flash: f32,
+    /// How long the hurt player flashes white.
+    pub hurt_flash: f32,
+    /// Speed a hit adds to an enemy along the shot, px/s.
+    pub knockback: f32,
+    /// Exponential decay rate of knockback speed, 1/s.
+    pub knockback_decay: f32,
 }
 
 /// Dodge Roll timings, in seconds from the start of the roll.
@@ -123,6 +166,54 @@ impl Weapons {
     }
 
     pub fn get(&self, id: &str) -> Option<&WeaponData> {
+        self.0.get(id)
+    }
+}
+
+/// Every enemy type from `assets/enemies.ron`, by enemy id.
+#[derive(Resource, Debug, Clone, Deserialize)]
+#[serde(transparent)]
+pub struct Enemies(HashMap<String, EnemyData>);
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct EnemyData {
+    pub name: String,
+    pub max_hp: f32,
+    /// Top speed, px/s.
+    pub speed: f32,
+    /// Exponential approach rate toward the wanted velocity, 1/s.
+    pub steering: f32,
+    /// Collision circle at the feet, px.
+    pub radius: f32,
+    #[serde(default)]
+    pub resistances: Resistances,
+    pub behaviour: EnemyBehaviour,
+}
+
+/// How an enemy fights.
+#[derive(Debug, Clone, Copy, Deserialize)]
+pub enum EnemyBehaviour {
+    /// Charges the player and hurts on contact.
+    Rusher(ContactData),
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+pub struct ContactData {
+    pub damage: f32,
+    pub damage_type: DamageType,
+    /// Seconds before this enemy's contact can hurt again.
+    pub cooldown: f32,
+    /// Speed the enemy bounces back with after hurting, px/s.
+    pub recoil: f32,
+}
+
+impl Enemies {
+    /// Parses the bundled `enemies.ron`.
+    pub fn bundled() -> Result<Self, ron::error::SpannedError> {
+        ron::from_str(ENEMIES_RON)
+    }
+
+    pub fn get(&self, id: &str) -> Option<&EnemyData> {
         self.0.get(id)
     }
 }

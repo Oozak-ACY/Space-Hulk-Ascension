@@ -1,0 +1,17 @@
+// Enemy definitions, keyed by enemy id (ADR 0003). Initial values are
+// spec v3 §9.1, validated by the combat-feel prototype.
+{
+    "cultist_rusher": (
+        name: "Cultist Rusher",
+        max_hp: 30.0,
+        speed: 70.0,                // px/s
+        steering: 6.0,              // 1/s approach toward its wanted velocity
+        radius: 6.0,                // px
+        behaviour: Rusher((
+            damage: 10.0,
+            damage_type: Physical,
+            cooldown: 0.8,          // s before its contact can hurt again
+            recoil: 120.0,          // px/s it bounces back after hurting the player
+        )),
+    ),
+}

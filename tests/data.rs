@@ -2,7 +2,7 @@
 
 use space_hulk_ascension::{
     combat::DamageType,
-    data::{Tuning, WeaponProfile, Weapons},
+    data::{Enemies, EnemyBehaviour, Tuning, WeaponProfile, Weapons},
 };
 
 #[test]
@@ -33,6 +33,43 @@ fn bundled_tuning_parses_and_holds_spec_values() {
     assert_eq!(floor.encounter_rooms, 1);
 
     assert_eq!(tuning.max_frame_delta, 0.05);
+
+    assert!(
+        tuning.player.resistances.is_empty(),
+        "a Mortal resists nothing"
+    );
+    assert_eq!(tuning.combat.max_resistance, 0.75);
+
+    let juice = &tuning.juice;
+    assert_eq!(
+        (juice.shake_on_hit, juice.shake_on_kill, juice.shake_on_hurt),
+        (1.0, 3.0, 6.0)
+    );
+    assert_eq!((juice.freeze_on_kill, juice.freeze_on_hurt), (0.040, 0.080));
+    assert_eq!(juice.knockback, 60.0);
+
+    assert_eq!(tuning.spawns.min_distance, 100.0);
+}
+
+#[test]
+fn bundled_enemies_parse_and_hold_spec_values() {
+    let enemies = Enemies::bundled().expect("enemies.ron must parse");
+
+    let rusher = enemies
+        .get("cultist_rusher")
+        .expect("the rusher is defined");
+    assert_eq!(rusher.max_hp, 30.0);
+    assert_eq!(rusher.speed, 70.0);
+    let EnemyBehaviour::Rusher(contact) = rusher.behaviour;
+    assert_eq!(contact.damage, 10.0);
+    assert!(contact.cooldown > 0.0);
+}
+
+#[test]
+fn the_opening_wave_enemy_exists() {
+    let tuning = Tuning::bundled().unwrap();
+    let enemies = Enemies::bundled().unwrap();
+    assert!(enemies.get(&tuning.spawns.wave_enemy).is_some());
 }
 
 #[test]

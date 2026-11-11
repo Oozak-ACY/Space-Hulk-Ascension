@@ -4,8 +4,9 @@
 //! Weapons and bolts sit at chest height, bolts over a ground shadow.
 
 use crate::{
-    combat::Projectile,
+    combat::{HitFlash, HurtInvulnerability, Projectile},
     data::Tuning,
+    enemies::Enemy,
     kinematics::{Position, Velocity},
     player::{AimIntent, Player},
     schedule::GameSystemSet,
@@ -18,6 +19,8 @@ const FLOOR_GRID: Color = Color::srgb(0.129, 0.137, 0.161);
 const WALL_EDGE: Color = Color::srgb(0.227, 0.239, 0.271);
 const WALL_FACE: Color = Color::srgb(0.302, 0.322, 0.357);
 const MORTAL: Color = Color::srgb(0.624, 0.827, 0.561);
+const RUSHER: Color = Color::srgb(0.753, 0.224, 0.169);
+const FLASH: Color = Color::WHITE;
 const WEAPON: Color = Color::srgb(0.420, 0.447, 0.494);
 const LAS_BOLT: Color = Color::srgb(1.0, 0.478, 0.361);
 const SHADOW: Color = Color::srgba(0.0, 0.0, 0.0, 0.35);
@@ -26,6 +29,9 @@ const FLOOR_GRID_STEP: f32 = 16.0;
 /// Side and bottom walls show only this much of their top edge.
 const WALL_TOP_EDGE: f32 = 3.0;
 const MORTAL_SIZE: Vec2 = Vec2::new(10.0, 16.0);
+const RUSHER_SIZE: Vec2 = Vec2::new(12.0, 14.0);
+/// Times per second the player blinks while invulnerable after a hit.
+const HURT_BLINK_RATE: f32 = 20.0;
 /// Height above the feet where weapons are held and bolts fly.
 const CHEST_HEIGHT: f32 = 9.0;
 const WEAPON_SIZE: Vec2 = Vec2::new(8.0, 2.0);
@@ -47,9 +53,12 @@ pub(super) fn plugin(app: &mut App) {
         (
             draw_new_rooms,
             draw_new_players,
+            draw_new_enemies,
             draw_new_projectiles,
             sync_positions,
             point_weapons,
+            flash_when_hit,
+            blink_while_invulnerable,
         )
             .chain()
             .in_set(GameSystemSet::RenderSync),
@@ -139,6 +148,10 @@ fn draw_new_rooms(
     }
 }
 
+/// The colour a sprite returns to when it stops flashing.
+#[derive(Component)]
+struct BaseColor(Color);
+
 /// Points at the aim, pivoting at the chest.
 #[derive(Component)]
 struct WeaponSprite;
@@ -149,6 +162,7 @@ fn draw_new_players(players: Query<Entity, Added<Player>>, mut commands: Command
             .entity(entity)
             .insert((
                 Sprite::from_color(MORTAL, MORTAL_SIZE),
+                BaseColor(MORTAL),
                 Anchor::BOTTOM_CENTER,
                 Transform::default(),
             ))
@@ -158,6 +172,35 @@ fn draw_new_players(players: Query<Entity, Added<Player>>, mut commands: Command
                 Anchor::CENTER_LEFT,
                 Transform::from_xyz(0.0, CHEST_HEIGHT, WEAPON_DEPTH),
             ));
+    }
+}
+
+fn draw_new_enemies(enemies: Query<Entity, Added<Enemy>>, mut commands: Commands) {
+    for entity in &enemies {
+        commands.entity(entity).insert((
+            Sprite::from_color(RUSHER, RUSHER_SIZE),
+            BaseColor(RUSHER),
+            Anchor::BOTTOM_CENTER,
+            Transform::default(),
+        ));
+    }
+}
+
+fn flash_when_hit(mut actors: Query<(&HitFlash, &BaseColor, &mut Sprite)>) {
+    for (flash, base, mut sprite) in &mut actors {
+        sprite.color = if flash.is_active() { FLASH } else { base.0 };
+    }
+}
+
+fn blink_while_invulnerable(mut players: Query<(&HurtInvulnerability, &mut Visibility)>) {
+    for (invulnerability, mut visibility) in &mut players {
+        let hidden = invulnerability.is_active()
+            && ((invulnerability.0 * HURT_BLINK_RATE) as u32).is_multiple_of(2);
+        *visibility = if hidden {
+            Visibility::Hidden
+        } else {
+            Visibility::Inherited
+        };
     }
 }
 

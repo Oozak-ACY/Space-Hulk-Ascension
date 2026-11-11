@@ -2,10 +2,14 @@
 
 #![allow(dead_code)]
 
-use bevy::prelude::*;
+use bevy::{
+    ecs::message::{MessageCursor, Messages},
+    prelude::*,
+};
 use space_hulk_ascension::{
-    combat::{FireIntent, Projectile, Weapon},
+    combat::{DamageRequest, DamageType, FireIntent, Health, Projectile, Weapon},
     data::{Tuning, WeaponData, Weapons},
+    enemies::{Enemy, SpawnEnemy},
     headless,
     kinematics::{Position, Velocity},
     player::{AimIntent, DodgeIntent, DodgeRoll, MoveIntent, Player},
@@ -14,8 +18,16 @@ use space_hulk_ascension::{
 };
 use std::collections::HashSet;
 
-/// A headless app with a Run started from `seed`.
+/// A headless app with a Run started from `seed`, its opening wave
+/// removed so the Room is quiet.
 pub fn app_in_run(seed: u64) -> App {
+    let mut app = app_in_run_with_wave(seed);
+    despawn_enemies(&mut app);
+    app
+}
+
+/// A headless app with a Run started from `seed`, opening wave and all.
+pub fn app_in_run_with_wave(seed: u64) -> App {
     let mut app = headless::app();
     start_run(&mut app, Some(seed));
     app
@@ -146,4 +158,94 @@ pub fn step_counting_shots(app: &mut App, frames: usize) -> Vec<usize> {
         }
     }
     fired
+}
+
+pub const RUSHER: &str = "cultist_rusher";
+
+#[derive(Debug, Clone)]
+pub struct EnemyState {
+    pub entity: Entity,
+    pub id: String,
+    pub position: Vec2,
+    pub hp: f32,
+}
+
+pub fn enemies(app: &mut App) -> Vec<EnemyState> {
+    app.world_mut()
+        .query::<(Entity, &Enemy, &Position, &Health)>()
+        .iter(app.world())
+        .map(|(entity, enemy, position, health)| EnemyState {
+            entity,
+            id: enemy.id().to_owned(),
+            position: position.0,
+            hp: health.current(),
+        })
+        .collect()
+}
+
+pub fn only_enemy(app: &mut App) -> EnemyState {
+    let mut all = enemies(app);
+    assert_eq!(all.len(), 1, "expected exactly one enemy");
+    all.remove(0)
+}
+
+/// Spawns an enemy, which acts from the next frame on.
+pub fn spawn_enemy(app: &mut App, id: &str, position: Vec2) -> Entity {
+    app.world_mut().write_message(SpawnEnemy {
+        id: id.to_owned(),
+        position,
+    });
+    app.update();
+    let spawned = enemies(app);
+    spawned
+        .iter()
+        .find(|enemy| enemy.id == id)
+        .map(|enemy| enemy.entity)
+        .expect("the enemy spawned")
+}
+
+pub fn despawn_enemies(app: &mut App) {
+    let all: Vec<Entity> = enemies(app).iter().map(|e| e.entity).collect();
+    for entity in all {
+        app.world_mut().despawn(entity);
+    }
+}
+
+pub fn player_health(app: &mut App) -> Health {
+    let player = player(app);
+    *app.world().get::<Health>(player).unwrap()
+}
+
+pub fn set_player_position(app: &mut App, position: Vec2) {
+    let player = player(app);
+    app.world_mut().get_mut::<Position>(player).unwrap().0 = position;
+}
+
+/// Asks for `amount` of `damage_type` damage to `target`, applied on the next frame.
+pub fn request_damage(app: &mut App, target: Entity, amount: f32, damage_type: DamageType) {
+    app.world_mut().write_message(DamageRequest {
+        target,
+        amount,
+        damage_type,
+        weapon: None,
+    });
+}
+
+/// Every message of type `M` written since the log was opened or last read.
+pub struct MessageLog<M: Message> {
+    cursor: MessageCursor<M>,
+}
+
+impl<M: Message + Clone> MessageLog<M> {
+    /// Starts after the messages already written.
+    pub fn open(app: &App) -> Self {
+        Self {
+            cursor: app.world().resource::<Messages<M>>().get_cursor_current(),
+        }
+    }
+
+    pub fn read(&mut self, app: &App) -> Vec<M> {
+        let messages = app.world().resource::<Messages<M>>();
+        self.cursor.read(messages).cloned().collect()
+    }
 }

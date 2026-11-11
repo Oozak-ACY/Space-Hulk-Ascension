@@ -1,5 +1,6 @@
 //! The fixed gameplay system order (spec v3 §6).
 
+use crate::run::AppState;
 use bevy::prelude::*;
 
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
@@ -33,5 +34,17 @@ pub(crate) fn plugin(app: &mut App) {
             GameSystemSet::RenderSync,
         )
             .chain(),
+    )
+    // Starting a Run, pausing and drawing go on outside the game.
+    .configure_sets(
+        Update,
+        (
+            GameSystemSet::ShotModification,
+            GameSystemSet::PhysicsAndCombat,
+            GameSystemSet::DamageAndDeathHooks,
+            GameSystemSet::EventEvaluation,
+            GameSystemSet::WorldReaction,
+        )
+            .run_if(in_state(AppState::InGame)),
     );
 }

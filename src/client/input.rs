@@ -7,6 +7,7 @@ use crate::{
     kinematics::Position,
     pause::PauseRequest,
     player::{AimIntent, DodgeIntent, MoveIntent, Player},
+    run::{AppState, StartRun},
     schedule::GameSystemSet,
 };
 use bevy::{
@@ -22,6 +23,7 @@ const PAUSE: [KeyCode; 2] = [KeyCode::KeyP, KeyCode::Escape];
 const DODGE_ROLL_KEY: KeyCode = KeyCode::Space;
 const DODGE_ROLL_BUTTON: MouseButton = MouseButton::Right;
 const FIRE_BUTTON: MouseButton = MouseButton::Left;
+const NEW_RUN: KeyCode = KeyCode::Enter;
 
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(
@@ -32,6 +34,7 @@ pub(super) fn plugin(app: &mut App) {
             write_dodge_intent,
             write_fire_intent,
             request_pause,
+            request_new_run.run_if(in_state(AppState::GameOver)),
         )
             .in_set(GameSystemSet::InputAndIntent),
     );
@@ -96,5 +99,11 @@ fn request_pause(
     }
     if focus.read().any(|change| !change.focused) {
         pause.write(PauseRequest::Pause);
+    }
+}
+
+fn request_new_run(keys: Res<ButtonInput<KeyCode>>, mut start_run: MessageWriter<StartRun>) {
+    if keys.just_pressed(NEW_RUN) {
+        start_run.write(StartRun { seed: None });
     }
 }

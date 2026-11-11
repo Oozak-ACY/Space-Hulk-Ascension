@@ -14,6 +14,7 @@
             invincibility: 0.30,
             cooldown: 0.8,
         ),
+        resistances: {},            // damage type: fraction ignored, e.g. { Energy: 0.25 }
     ),
     room: (
         interior_width: 464.0,      // px
@@ -27,6 +28,26 @@
         grid_height: 8,             // Rooms
         expansion_chance: 0.5,      // per Room, per direction
         encounter_rooms: 1,
+    ),
+    combat: (
+        max_resistance: 0.75,       // no Resistance ignores more than this fraction of a hit
+    ),
+    spawns: (
+        min_distance: 100.0,        // px from the player
+        wave_enemy: "cultist_rusher", // id in enemies.ron
+        wave_size: 4,               // the Run's opening wave, until Rooms have their own fights
+    ),
+    juice: (
+        shake_on_hit: 1.0,          // px
+        shake_on_kill: 3.0,
+        shake_on_hurt: 6.0,
+        shake_decay: 40.0,          // px/s
+        freeze_on_kill: 0.040,      // s
+        freeze_on_hurt: 0.080,
+        hit_flash: 0.08,            // s an enemy flashes white when hit
+        hurt_flash: 0.12,           // s the player flashes white when hurt
+        knockback: 60.0,            // px/s added to a hit enemy along the shot
+        knockback_decay: 10.0,      // 1/s
     ),
     max_frame_delta: 0.05,          // s; longer frames are clamped so nothing tunnels
 )
