@@ -93,7 +93,7 @@ pub struct WeaponData {
     pub interval: f32,
     /// Projectile speed, px/s.
     pub speed: f32,
-    /// Full cone width in degrees: each shot strays up to half of it either side of the aim.
+    /// Degrees either side of the aim each shot may stray (±spread).
     pub spread: f32,
     pub projectile_radius: f32,
     pub profile: WeaponProfile,

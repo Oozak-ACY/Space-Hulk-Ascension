@@ -84,26 +84,36 @@ fn bolts_fly_along_the_aim_within_the_spread() {
     assert!((bolt.velocity.length() - weapon.speed).abs() < 1e-2);
     let deviation = bolt.velocity.angle_to(aim).to_degrees().abs();
     assert!(
-        deviation <= weapon.spread / 2.0 + 1e-3,
+        deviation <= weapon.spread + 1e-3,
         "{deviation}° off the aim"
     );
     assert_eq!(bolt.projectile.damage, weapon.damage);
     assert_eq!(bolt.projectile.damage_type, DamageType::Energy);
 }
 
+/// Spread is ± its value: shots stray up to that many degrees either side.
 #[test]
-fn spread_varies_between_shots() {
-    let mut app = app_in_run(1);
-    set_aim_intent(&mut app, Vec2::X);
-    set_fire_intent(&mut app, true);
-    step(&mut app, frames(1.0));
-
-    let directions: Vec<Vec2> = projectiles(&mut app)
-        .iter()
-        .map(|bolt| bolt.velocity.normalize())
+fn spread_scatters_shots_up_to_its_angle_either_side() {
+    let spread = laspistol(&app_in_run(1)).spread;
+    let deviations: Vec<f32> = (0..40)
+        .map(|seed| {
+            let mut app = app_in_run(seed);
+            set_aim_intent(&mut app, Vec2::X);
+            set_fire_intent(&mut app, true);
+            step(&mut app, 1);
+            only_projectile(&mut app).velocity.to_angle().to_degrees()
+        })
         .collect();
-    assert!(directions.len() > 2);
-    assert!(directions.windows(2).any(|w| w[0].distance(w[1]) > 1e-4));
+
+    assert!(deviations.iter().all(|d| d.abs() <= spread + 1e-3));
+    assert!(
+        deviations.iter().any(|d| *d > spread / 2.0),
+        "none strayed far left"
+    );
+    assert!(
+        deviations.iter().any(|d| *d < -spread / 2.0),
+        "none strayed far right"
+    );
 }
 
 #[test]

@@ -7,7 +7,7 @@
         damage_type: Energy,
         interval: 0.20,             // s between shots while fire is held
         speed: 360.0,               // px/s
-        spread: 4.0,                // full cone in degrees: shots stray up to half of it either side
+        spread: 4.0,                // degrees either side of the aim (±4°)
         projectile_radius: 2.0,     // px
         profile: Overheat((
             heat_per_shot: 15.0,

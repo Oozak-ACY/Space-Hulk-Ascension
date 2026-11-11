@@ -45,7 +45,7 @@ fn spawn_projectiles(
     mut commands: Commands,
 ) {
     for shot in requests.read() {
-        let deviation = (rng.0.f32() - 0.5) * shot.spread.to_radians();
+        let deviation = (rng.0.f32() * 2.0 - 1.0) * shot.spread.to_radians();
         let direction = Vec2::from_angle(deviation).rotate(shot.direction);
         commands.spawn((
             Projectile {

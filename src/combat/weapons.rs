@@ -25,7 +25,7 @@ pub struct ShotRequest {
     pub direction: Vec2,
     /// px/s.
     pub speed: f32,
-    /// Full cone width in degrees.
+    /// Degrees either side of the aim.
     pub spread: f32,
     pub damage: f32,
     pub damage_type: DamageType,
